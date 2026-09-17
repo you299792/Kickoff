@@ -1,56 +1,58 @@
-# Welcome to your Expo app 👋
+# Football Match Manager
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A lightweight, single-screen dashboard for running a football match, such as a Sunday pickup game, from your phone.
 
-## Get started
+The app uses browser Local Storage instead of a cloud database, so it requires zero setup and keeps your match data on your device. Scores, player details, lineup positions, match time, and substitutions remain available after refreshing or reopening the app in the same browser.
 
-1. Install dependencies
+## Core Features
 
-   ```bash
-   npm install
-   ```
+### 1. Interactive Scoreboard
 
-2. Start the app
+- **Manual counters:** Use large, tap-friendly `+` and `-` buttons to track goals and fouls for Team A and Team B.
+- **Match clock:** Start and pause a timer for standard 45-minute halves or shorter custom pickup games.
+- **Period tracker:** Switch between `First Half`, `Second Half`, and `Full Time`.
 
-   ```bash
-   npx expo start
-   ```
+### 2. Drag-and-Drop Lineup Board
 
-In the output, you'll find options to open the app in a
+- **Pitch visualizer:** Arrange players on a green football pitch.
+- **Formation toggles:** Quickly shift player slots into classic formations such as `4-3-3`, `4-4-2`, and `3-5-2`.
+- **Squad list:** Enter your friends' names and drag them onto their positions on the pitch.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### 3. Live Substitution and Minutes Tracker
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- **Roster toggles:** Mark each player as `On Field` or `Benched`.
+- **Active time clock:** A local TypeScript timer tracks a player's time while they are on the pitch and pauses when they move to the bench.
+- **Accurate totals:** See the exact number of minutes played by every player.
 
-## Get a fresh project
+## How Data Is Stored
 
-When you're ready, run:
+The app does not send match statistics to a remote server. Instead, it serializes the current match state and saves it directly in the browser with `localStorage`:
 
-```bash
-npm run reset-project
+```typescript
+localStorage.setItem('matchState', JSON.stringify(currentMatchData));
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Whenever a goal is scored, a player is moved, or a substitution is made, the saved state can be updated. If the browser is refreshed or closed during a match, reopening the app restores the saved match time, roster, lineup, and score.
 
-### Other setup steps
+Because the data is stored locally, it is not synchronized across devices and may be lost if the browser's site data is cleared.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Mobile-First Layout
 
-## Learn more
+The dashboard is designed for easy-to-tap controls while managing a match from the sidelines.
 
-To learn more about developing your project with Expo, look at the following resources:
+## Getting Started
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Install dependencies:
 
-## Join the community
+```bash
+npm install
+```
 
-Join our community of developers creating universal apps.
+Start the Expo development server:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+npx expo start
+```
+
+Then open the app in a browser, Android emulator, iOS simulator, or Expo Go.
+
