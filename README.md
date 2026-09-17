@@ -1,6 +1,6 @@
 # Football Match Manager
 
-A lightweight, single-screen dashboard for running a football match, such as a Sunday pickup game, from your phone.
+A lightweight app for running a football match, such as a Sunday pickup game, from your phone.
 
 The app uses browser Local Storage instead of a cloud database, so it requires zero setup and keeps your match data on your device. Scores, player details, lineup positions, match time, and substitutions remain available after refreshing or reopening the app in the same browser.
 
