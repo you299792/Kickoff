@@ -1,4 +1,4 @@
-# Football Match Manager
+# Kickoff - Football Match Manager
 
 A lightweight app for running a football match, such as a Sunday pickup game, from your phone.
 
