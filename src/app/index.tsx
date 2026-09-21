@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -108,6 +109,7 @@ function teamColor(name: string) {
 }
 
 export default function HomeScreen() {
+  const router = useRouter();
   const [filter, setFilter] = useState<FilterKey>('all');
 
   const summary = useMemo(() => {
@@ -143,7 +145,7 @@ export default function HomeScreen() {
   ];
 
   function handleAddMatch() {
-    Alert.alert('New match', 'Match setup is ready to be added here.');
+    router.push('/new-match');
   }
 
   return (
@@ -343,7 +345,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingTop: Spacing.four,
-    paddingBottom: 140,
+    paddingBottom: 220,
   },
   header: {
     marginBottom: Spacing.four,
@@ -528,7 +530,7 @@ const styles = StyleSheet.create({
   addButton: {
     position: 'absolute',
     right: Spacing.three,
-    bottom: 88,
+    bottom: 112,
     zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
