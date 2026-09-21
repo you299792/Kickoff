@@ -15,6 +15,7 @@ export default function AppTabs() {
           <TabTrigger name="teams" href="/teams" asChild>
             <TabButton icon={require('@/assets/images/tabIcons/explore.png')} label="Teams" />
           </TabTrigger>
+          <TabTrigger name="new-match" href="/new-match" style={styles.hiddenRoute} />
         </View>
       </TabList>
     </Tabs>
@@ -80,5 +81,8 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.55,
+  },
+  hiddenRoute: {
+    display: 'none',
   },
 });
