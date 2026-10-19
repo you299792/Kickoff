@@ -38,6 +38,7 @@ export default function NewMatchScreen() {
   const [teams, setTeams] = useState<Team[]>(initialTeams);
   const [selectedTeamId, setSelectedTeamId] = useState(initialTeams[0]?.id ?? '');
   const [selectedOpponentId, setSelectedOpponentId] = useState('');
+  const [openTeamDropdown, setOpenTeamDropdown] = useState<'home' | 'opponent' | null>(null);
   const [competition, setCompetition] = useState('League');
   const [location, setLocation] = useState('');
   const [date, setDate] = useState('');
@@ -53,6 +54,7 @@ export default function NewMatchScreen() {
 
   function selectHomeTeam(id: string) {
     setSelectedTeamId(id);
+    setOpenTeamDropdown(null);
     // Prevent the same team being both sides
     if (id === selectedOpponentId) setSelectedOpponentId('');
     setError('');
@@ -60,6 +62,7 @@ export default function NewMatchScreen() {
 
   function selectOpponentTeam(id: string) {
     setSelectedOpponentId(id);
+    setOpenTeamDropdown(null);
     if (id === selectedTeamId) setSelectedTeamId('');
     setError('');
   }
@@ -124,7 +127,7 @@ export default function NewMatchScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardView}>
@@ -172,26 +175,22 @@ export default function NewMatchScreen() {
               required
               description="Pick the squad you're recording for.">
               {teams.length > 0 ? (
-                <View style={styles.teamOptions}>
-                  {teams.map((team) => {
-                    const selected = team.id === selectedTeamId;
-                    return (
-                      <TeamOption
-                        key={team.id}
-                        team={team}
-                        selected={selected}
-                        onPress={() => selectHomeTeam(team.id)}
-                      />
-                    );
-                  })}
-                </View>
+                <TeamDropdown
+                  teams={teams}
+                  selectedTeam={selectedTeam}
+                  placeholder="Choose your team"
+                  expanded={openTeamDropdown === 'home'}
+                  onToggle={() =>
+                    setOpenTeamDropdown((current) => (current === 'home' ? null : 'home'))
+                  }
+                  onSelect={selectHomeTeam}
+                />
               ) : (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.helperText}>
                   You need a team before you can record a match.
                 </ThemedText>
               )}
 
-              
             </FormSection>
 
             {/* 2. Opponent */}
@@ -201,28 +200,22 @@ export default function NewMatchScreen() {
               required
               description="Pick the team you're playing against.">
               {teams.filter((team) => team.id !== selectedTeamId).length > 0 ? (
-                <View style={styles.teamOptions}>
-                  {teams
-                    .filter((team) => team.id !== selectedTeamId)
-                    .map((team) => {
-                      const selected = team.id === selectedOpponentId;
-                      return (
-                        <TeamOption
-                          key={team.id}
-                          team={team}
-                          selected={selected}
-                          onPress={() => selectOpponentTeam(team.id)}
-                        />
-                      );
-                    })}
-                </View>
+                <TeamDropdown
+                  teams={teams.filter((team) => team.id !== selectedTeamId)}
+                  selectedTeam={selectedOpponent}
+                  placeholder="Choose an opponent"
+                  expanded={openTeamDropdown === 'opponent'}
+                  onToggle={() =>
+                    setOpenTeamDropdown((current) => (current === 'opponent' ? null : 'opponent'))
+                  }
+                  onSelect={selectOpponentTeam}
+                />
               ) : (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.helperText}>
                   Add another team to use as your opponent.
                 </ThemedText>
               )}
 
-              
             </FormSection>
 
             {/* 3. Fixture details */}
@@ -384,7 +377,7 @@ type FormSectionProps = {
 
 function FormSection({ step, title, required, description, children }: FormSectionProps) {
   return (
-    <View style={styles.section}>
+    <ThemedView type="backgroundElement" style={styles.section}>
       <View style={styles.sectionHeader}>
         <View style={styles.stepBadge}>
           <ThemedText style={styles.stepBadgeText}>{step}</ThemedText>
@@ -402,7 +395,7 @@ function FormSection({ step, title, required, description, children }: FormSecti
         </View>
       </View>
       <View style={styles.sectionBody}>{children}</View>
-    </View>
+    </ThemedView>
   );
 }
 
@@ -411,6 +404,64 @@ type TeamOptionProps = {
   selected: boolean;
   onPress: () => void;
 };
+
+type TeamDropdownProps = {
+  teams: Team[];
+  selectedTeam: Team | undefined;
+  placeholder: string;
+  expanded: boolean;
+  onToggle: () => void;
+  onSelect: (id: string) => void;
+};
+
+function TeamDropdown({
+  teams,
+  selectedTeam,
+  placeholder,
+  expanded,
+  onToggle,
+  onSelect,
+}: TeamDropdownProps) {
+  return (
+    <View style={styles.teamDropdown}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={selectedTeam?.name ?? placeholder}
+        onPress={onToggle}
+        style={({ pressed }) => [styles.teamDropdownTrigger, pressed && styles.pressed]}>
+        {selectedTeam ? (
+          <View style={[styles.teamBadge, { backgroundColor: selectedTeam.color }]}>
+            <ThemedText style={styles.teamBadgeText}>
+              {selectedTeam.name.slice(0, 2).toUpperCase()}
+            </ThemedText>
+          </View>
+        ) : null}
+        <ThemedText
+          themeColor={selectedTeam ? undefined : 'textSecondary'}
+          style={styles.teamOptionText}
+          numberOfLines={1}>
+          {selectedTeam?.name ?? placeholder}
+        </ThemedText>
+        <ThemedText themeColor="textSecondary" style={styles.dropdownIndicator}>
+          {expanded ? '⌃' : '⌄'}
+        </ThemedText>
+      </Pressable>
+      {expanded ? (
+        <View style={styles.teamDropdownMenu}>
+          {teams.map((team) => (
+            <TeamOption
+              key={team.id}
+              team={team}
+              selected={team.id === selectedTeam?.id}
+              onPress={() => onSelect(team.id)}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 function TeamOption({ team, selected, onPress }: TeamOptionProps) {
   return (
@@ -540,14 +591,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
   },
   keyboardView: { flex: 1 },
-  content: { paddingTop: Spacing.three, paddingBottom: Spacing.five },
+  content: { paddingTop: Spacing.four, paddingBottom: Spacing.six },
 
-  header: { marginBottom: Spacing.five },
+  header: { marginBottom: Spacing.four },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
-    marginBottom: Spacing.three,
+    marginBottom: Spacing.four,
     alignSelf: 'flex-start',
     paddingVertical: 4,
     paddingRight: 8,
@@ -555,8 +606,8 @@ const styles = StyleSheet.create({
   backIcon: { fontSize: 22, fontWeight: '600', lineHeight: 22 },
   backText: { fontWeight: '600' },
   pressed: { opacity: 0.7 },
-  title: { fontSize: 36, lineHeight: 42, fontWeight: '700' },
-  subtitle: { marginTop: Spacing.one, fontSize: 16 },
+  title: { fontSize: 38, lineHeight: 46, fontWeight: '700' },
+  subtitle: { marginTop: Spacing.one, fontSize: 16, lineHeight: 23 },
 
   stepIndicator: {
     flexDirection: 'row',
@@ -572,9 +623,16 @@ const styles = StyleSheet.create({
   },
   stepDotActive: { backgroundColor: '#1f7a4d' },
   stepLine: { flex: 1, height: 2, backgroundColor: HAIRLINE, borderRadius: 1 },
-  stepCaption: { marginTop: Spacing.two },
+  stepCaption: { marginTop: Spacing.two, fontSize: 14 },
 
-  section: { marginBottom: Spacing.five, gap: Spacing.three },
+  section: {
+    marginBottom: Spacing.three,
+    gap: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: HAIRLINE,
+  },
   sectionHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two },
   stepBadge: {
     width: 28,
@@ -587,17 +645,40 @@ const styles = StyleSheet.create({
   },
   stepBadgeText: { color: '#1f7a4d', fontWeight: '700', fontSize: 13 },
   sectionHeaderText: { flex: 1, gap: 2 },
-  sectionTitle: { fontSize: 22, lineHeight: 28 },
-  sectionDescription: { fontSize: 13 },
+  sectionTitle: { fontSize: 21, lineHeight: 28 },
+  sectionDescription: { fontSize: 14, lineHeight: 20 },
   sectionBody: { gap: Spacing.three },
   required: { color: '#c0392b' },
 
-  teamOptions: { gap: Spacing.two },
+  teamDropdown: { gap: Spacing.two },
+  teamDropdownTrigger: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+    backgroundColor: 'rgba(128, 128, 128, 0.05)',
+  },
+  teamDropdownMenu: {
+    gap: Spacing.two,
+    padding: Spacing.two,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+    backgroundColor: 'rgba(128, 128, 128, 0.05)',
+  },
+  dropdownIndicator: { fontSize: 20, lineHeight: 24, paddingHorizontal: Spacing.one },
   teamOption: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    padding: Spacing.two,
+    minHeight: 54,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.two,
     borderRadius: Spacing.two,
     borderWidth: 1,
     borderColor: HAIRLINE,
@@ -614,7 +695,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   teamBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-  teamOptionText: { flex: 1, fontWeight: '600' },
+  teamOptionText: { flex: 1, fontSize: 16, fontWeight: '600' },
   radio: {
     width: 20,
     height: 20,
@@ -648,15 +729,16 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: { fontSize: 16, fontWeight: '600' },
 
-  field: { gap: Spacing.one, flex: 1 },
-  label: { fontWeight: '600' },
+  field: { gap: Spacing.two, flex: 1 },
+  label: { fontSize: 14, fontWeight: '700' },
   input: {
-    minHeight: 46,
+    minHeight: 54,
     borderWidth: 1,
     borderColor: HAIRLINE,
     borderRadius: Spacing.two,
-    paddingHorizontal: Spacing.two,
+    paddingHorizontal: Spacing.three,
     backgroundColor: 'rgba(128, 128, 128, 0.08)',
+    fontSize: 16,
   },
   multilineInput: { minHeight: 92, paddingTop: Spacing.two, paddingBottom: Spacing.two },
   smallButton: {
@@ -708,6 +790,7 @@ const styles = StyleSheet.create({
   durationRow: { flexDirection: 'row', gap: Spacing.two },
   durationPill: {
     flex: 1,
+    minHeight: 68,
     paddingVertical: Spacing.two,
     paddingHorizontal: Spacing.two,
     borderRadius: Spacing.two,
@@ -716,7 +799,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
   },
-  durationPillValue: { fontSize: 16, fontWeight: '700' },
+  durationPillValue: { fontSize: 17, fontWeight: '700' },
 
   charCount: { alignSelf: 'flex-end', marginTop: -Spacing.two },
 
