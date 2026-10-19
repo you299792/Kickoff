@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -110,6 +110,7 @@ function teamColor(name: string) {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<FilterKey>('all');
 
   const summary = useMemo(() => {
@@ -150,7 +151,7 @@ export default function HomeScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
             <ThemedText type="title" style={styles.title}>
@@ -321,7 +322,11 @@ export default function HomeScreen() {
           accessibilityLabel="Add new match"
           accessibilityRole="button"
           onPress={handleAddMatch}
-          style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}>
+          style={({ pressed }) => [
+            styles.addButton,
+            { bottom: + insets.bottom },
+            pressed && styles.addButtonPressed,
+          ]}>
           <View style={styles.addButtonIcon}>
             <ThemedText style={styles.addButtonIconText}>+</ThemedText>
           </View>
@@ -530,7 +535,7 @@ const styles = StyleSheet.create({
   addButton: {
     position: 'absolute',
     right: Spacing.three,
-    bottom: 112,
+    bottom: 32,
     zIndex: 10,
     flexDirection: 'row',
     alignItems: 'center',
