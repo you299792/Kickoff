@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -108,6 +109,7 @@ function initials(name: string) {
 }
 
 export default function TeamsScreen() {
+  const router = useRouter();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const summary = useMemo(() => {
@@ -140,15 +142,25 @@ export default function TeamsScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <ThemedText type="title" style={styles.title}>
-              Teams
-            </ThemedText>
-            <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-              Your match squads
-            </ThemedText>
+            <View>
+              <ThemedText type="title" style={styles.title}>
+                Teams
+              </ThemedText>
+              <ThemedText themeColor="textSecondary" style={styles.subtitle}>
+                Your match squads
+              </ThemedText>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Create a new team"
+              onPress={() => router.push('/create-team')}
+              style={({ pressed }) => [styles.newTeamButton, pressed && styles.cardPressed]}>
+              <ThemedText style={styles.newTeamButtonIcon}>+</ThemedText>
+              <ThemedText style={styles.newTeamButtonText}>New team</ThemedText>
+            </Pressable>
           </View>
 
           <ThemedView type="backgroundElement" style={styles.statsCard}>
@@ -306,9 +318,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
   },
   content: { paddingTop: Spacing.four, paddingBottom: 140 },
-  header: { marginBottom: Spacing.four },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    marginBottom: Spacing.four,
+  },
   title: { fontSize: 40, lineHeight: 46, fontWeight: '700' },
   subtitle: { marginTop: Spacing.one, fontSize: 17 },
+  newTeamButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    borderRadius: 999,
+    backgroundColor: '#1f7a4d',
+  },
+  newTeamButtonIcon: { color: '#ffffff', fontSize: 20, lineHeight: 22, fontWeight: '700' },
+  newTeamButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
 
   statsCard: {
     paddingVertical: Spacing.three,
