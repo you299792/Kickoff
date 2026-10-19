@@ -1,14 +1,21 @@
 import { Tabs, TabList, TabSlot, TabTrigger, TabTriggerSlotProps } from 'expo-router/ui';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Spacing } from '@/constants/theme';
 
 export default function AppTabs() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs>
       <TabSlot style={styles.tabSlot} />
       <TabList asChild>
-        <View style={styles.tabBar}>
+        <View
+          style={StyleSheet.flatten([
+            styles.tabBar,
+            { height: 72 + insets.bottom, paddingBottom: Spacing.two + insets.bottom },
+          ])}>
           <TabTrigger name="home" href="/" asChild>
             <TabButton icon={require('@/assets/images/tabIcons/home.png')} label="Home" />
           </TabTrigger>
@@ -16,6 +23,7 @@ export default function AppTabs() {
             <TabButton icon={require('@/assets/images/tabIcons/explore.png')} label="Teams" />
           </TabTrigger>
           <TabTrigger name="new-match" href="/new-match" style={styles.hiddenRoute} />
+          <TabTrigger name="create-team" href="/create-team" style={styles.hiddenRoute} />
         </View>
       </TabList>
     </Tabs>
