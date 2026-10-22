@@ -21,41 +21,7 @@ type Match = {
   scorers: string[];
 };
 
-const matchHistory: Match[] = [
-  {
-    id: '1',
-    date: 'Sat 12 Oct',
-    competition: 'League',
-    venue: 'Riverside Park',
-    homeTeam: 'Riverside FC',
-    awayTeam: 'The Rovers',
-    homeGoals: 3,
-    awayGoals: 2,
-    scorers: ["J. Miller 12'", "A. Cole 44'", "D. Reyes 78'"],
-  },
-  {
-    id: '2',
-    date: 'Sun 6 Oct',
-    competition: 'Cup',
-    venue: 'Parkside Arena',
-    homeTeam: 'Sunday United',
-    awayTeam: 'Parkside FC',
-    homeGoals: 1,
-    awayGoals: 1,
-    scorers: ["M. Novak 63'"],
-  },
-  {
-    id: '3',
-    date: 'Sat 28 Sep',
-    competition: 'League',
-    venue: 'North End Ground',
-    homeTeam: 'North End',
-    awayTeam: 'Athletic Club',
-    homeGoals: 4,
-    awayGoals: 0,
-    scorers: ["T. Bailey 9'", "T. Bailey 23'", "R. Osei 51'", "K. Lang 88'"],
-  },
-];
+const matchHistory: Match[] = [];
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -158,7 +124,7 @@ export default function HomeScreen() {
               Kickoff
             </ThemedText>
             <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-              Match history · 2025/26 season
+              Your match history
             </ThemedText>
           </View>
 

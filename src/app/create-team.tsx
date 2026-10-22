@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { saveCreatedTeam } from '@/data/teams';
 import { useTheme } from '@/hooks/use-theme';
 
 const TEAM_COLOR_PALETTE = [
@@ -30,7 +31,7 @@ const STARTING_POSITIONS = [
 ] as const;
 
 type StartingPosition = (typeof STARTING_POSITIONS)[number]['code'];
-type PlayerDraft = { id: number; name: string; position: StartingPosition | null };
+type PlayerDraft = { id: number; name: string; position: StartingPosition };
 type PitchSlot = { id: string; label: string };
 
 const PITCH_ROWS: { label: string; slots: PitchSlot[] }[] = [
@@ -78,6 +79,46 @@ export default function CreateTeamScreen() {
   const [showLineup, setShowLineup] = useState(false);
   const [lineup, setLineup] = useState<Record<string, number>>({});
   const [activePitchSlot, setActivePitchSlot] = useState<PitchSlot | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  async function saveTeam() {
+    const name = teamName.trim();
+    if (!name) {
+      setSaveError('Enter a team name before saving.');
+      return;
+    }
+
+    const savedLineup: Record<string, string> = {};
+    for (const [slotId, playerId] of Object.entries(lineup)) {
+      const player = players.find((current) => current.id === playerId);
+      if (player) savedLineup[slotId] = player.name;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await saveCreatedTeam({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name,
+        color: teamColor,
+        captain: captain.trim(),
+        homeGround: homeGround.trim(),
+        roster: players.map((player, index) => ({
+          number: index + 1,
+          name: player.name,
+          position: player.position,
+        })),
+        lineup: savedLineup,
+      });
+      router.replace('/teams');
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Unable to save this team.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   function addPlayer() {
     const name = playerName.trim();
     if (!name || !playerPosition) return;
@@ -409,11 +450,29 @@ export default function CreateTeamScreen() {
             </View>
           </ThemedView>
 
-          <View style={styles.comingSoon}>
-            <ThemedText style={styles.comingSoonTitle}>Team saving is coming soon</ThemedText>
-            <ThemedText themeColor="textSecondary" style={styles.comingSoonText}>
-              Player names and positions can be entered here, but team details can’t be saved yet.
+          <View style={styles.saveTeamSection}>
+            <ThemedText themeColor="textSecondary" style={styles.saveTeamHint}>
+              Save your team and its squad to see it on the teams screen.
             </ThemedText>
+            {saveError ? (
+              <ThemedText accessibilityRole="alert" style={styles.saveError}>
+                {saveError}
+              </ThemedText>
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save team"
+              disabled={isSaving || !teamName.trim()}
+              onPress={() => void saveTeam()}
+              style={({ pressed }) => [
+                styles.saveTeamButton,
+                (isSaving || !teamName.trim()) && styles.saveTeamButtonDisabled,
+                pressed && styles.pressed,
+              ]}>
+              <ThemedText style={styles.saveTeamButtonText}>
+                {isSaving ? 'Saving team…' : 'Save team'}
+              </ThemedText>
+            </Pressable>
           </View>
         </ScrollView>
         <Modal
@@ -880,13 +939,23 @@ const styles = StyleSheet.create({
   playerPickerEmpty: { paddingVertical: Spacing.three, fontSize: 14, lineHeight: 21 },
   clearAssignment: { alignItems: 'center', paddingVertical: Spacing.two },
   clearAssignmentText: { color: '#c0392b', fontWeight: '700' },
-  comingSoon: {
+  saveTeamSection: {
     marginTop: Spacing.four,
     padding: Spacing.three,
     borderRadius: Spacing.two,
     backgroundColor: 'rgba(31, 122, 77, 0.10)',
     gap: Spacing.one,
   },
-  comingSoonTitle: { fontSize: 15, fontWeight: '700' },
-  comingSoonText: { fontSize: 14, lineHeight: 21 },
+  saveTeamHint: { fontSize: 14, lineHeight: 21 },
+  saveError: { color: '#c0392b', fontSize: 14, lineHeight: 20 },
+  saveTeamButton: {
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+    borderRadius: Spacing.two,
+    backgroundColor: '#1f7a4d',
+  },
+  saveTeamButtonDisabled: { opacity: 0.45 },
+  saveTeamButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
 });

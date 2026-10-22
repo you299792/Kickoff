@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { CreatedTeam, getCreatedTeams } from '@/data/teams';
 
 type Form = 'W' | 'D' | 'L';
 
@@ -25,63 +26,9 @@ type Team = {
   draws: number;
   losses: number;
   roster: Player[];
+  homeGround?: string;
+  lineup?: Record<string, string>;
 };
-
-const teams: Team[] = [
-  {
-    id: '1',
-    name: 'Riverside FC',
-    color: '#1f7a4d',
-    captain: 'J. Miller',
-    form: ['W', 'W', 'D', 'L', 'W'],
-    wins: 9,
-    draws: 3,
-    losses: 2,
-    roster: [
-      { number: 1, name: 'Sam Porter', position: 'GK' },
-      { number: 4, name: 'Dan Reyes', position: 'DF' },
-      { number: 6, name: 'Liam Hughes', position: 'DF' },
-      { number: 8, name: 'Jordan Miller', position: 'MF' },
-      { number: 10, name: 'Aaron Cole', position: 'MF' },
-      { number: 9, name: 'Marco Silva', position: 'FW' },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Sunday United',
-    color: '#2f6fb5',
-    captain: 'M. Novak',
-    form: ['D', 'L', 'W', 'D', 'D'],
-    wins: 5,
-    draws: 5,
-    losses: 4,
-    roster: [
-      { number: 1, name: 'Chris Vale', position: 'GK' },
-      { number: 3, name: 'Owen Blake', position: 'DF' },
-      { number: 5, name: 'Peter Shaw', position: 'DF' },
-      { number: 7, name: 'Marek Novak', position: 'MF' },
-      { number: 11, name: 'Tariq Aziz', position: 'FW' },
-    ],
-  },
-  {
-    id: '3',
-    name: 'North End',
-    color: '#8e44ad',
-    captain: 'T. Bailey',
-    form: ['W', 'W', 'W', 'W', 'D'],
-    wins: 11,
-    draws: 2,
-    losses: 1,
-    roster: [
-      { number: 1, name: 'Alex Kerr', position: 'GK' },
-      { number: 2, name: 'Rui Osei', position: 'DF' },
-      { number: 6, name: 'Kyle Lang', position: 'DF' },
-      { number: 8, name: 'Toby Bailey', position: 'MF' },
-      { number: 9, name: 'Nathan Fry', position: 'FW' },
-      { number: 14, name: 'Ben Ito', position: 'FW' },
-    ],
-  },
-];
 
 // Theme-agnostic tints so pills read well in light and dark mode.
 const RESULT_COLORS: Record<Form, { bg: string; text: string; label: string }> = {
@@ -111,6 +58,41 @@ function initials(name: string) {
 export default function TeamsScreen() {
   const router = useRouter();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [createdTeams, setCreatedTeams] = useState<CreatedTeam[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      async function loadTeams() {
+        try {
+          const savedTeams = await getCreatedTeams();
+          if (isActive) {
+            setCreatedTeams(savedTeams);
+            setLoadError(null);
+          }
+        } catch (error) {
+          if (isActive) {
+            setLoadError(error instanceof Error ? error.message : 'Unable to load saved teams.');
+          }
+        }
+      }
+
+      void loadTeams();
+      return () => {
+        isActive = false;
+      };
+    }, []),
+  );
+
+  const teams: Team[] = createdTeams.map((team) => ({
+    ...team,
+    form: [],
+    wins: 0,
+    draws: 0,
+    losses: 0,
+  }));
 
   const summary = useMemo(() => {
     const totalPlayers = teams.reduce((total, team) => total + team.roster.length, 0);
@@ -127,7 +109,7 @@ export default function TeamsScreen() {
       avgSquad: teams.length === 0 ? 0 : Math.round((totalPlayers / teams.length) * 10) / 10,
       winRate,
     };
-  }, []);
+  }, [teams]);
 
   const stats = [
     { label: 'Teams', value: `${summary.teams}` },
@@ -189,6 +171,11 @@ export default function TeamsScreen() {
           </View>
 
           <View style={styles.teamList}>
+            {loadError ? (
+              <ThemedText accessibilityRole="alert" style={styles.loadError}>
+                {loadError}
+              </ThemedText>
+            ) : null}
             {teams.map((team) => {
               const isExpanded = expandedId === team.id;
               const played = team.wins + team.draws + team.losses;
@@ -217,6 +204,14 @@ export default function TeamsScreen() {
                         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
                           Captain · {team.captain}
                         </ThemedText>
+                        {team.homeGround ? (
+                          <ThemedText
+                            type="small"
+                            themeColor="textSecondary"
+                            numberOfLines={1}>
+                            Home ground · {team.homeGround}
+                          </ThemedText>
+                        ) : null}
                       </View>
 
                       <View style={styles.chevron}>
@@ -295,6 +290,23 @@ export default function TeamsScreen() {
                             </View>
                           ))}
                         </View>
+                        {team.lineup && Object.keys(team.lineup).length > 0 ? (
+                          <>
+                            <ThemedText
+                              type="small"
+                              themeColor="textSecondary"
+                              style={styles.rosterTitle}>
+                              STARTING LINEUP
+                            </ThemedText>
+                            <View style={styles.lineupList}>
+                              {Object.entries(team.lineup).map(([slot, playerName]) => (
+                                <ThemedText key={slot} style={styles.lineupPlayer}>
+                                  {slot.replace(/-/g, ' ')} · {playerName}
+                                </ThemedText>
+                              ))}
+                            </View>
+                          </>
+                        ) : null}
                       </View>
                     ) : null}
                   </ThemedView>
@@ -403,9 +415,12 @@ const styles = StyleSheet.create({
   formDotText: { fontSize: 11, fontWeight: '700' },
 
   rosterSection: { gap: Spacing.two },
+  loadError: { color: '#c0392b', fontSize: 14, lineHeight: 20 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: HAIRLINE },
   rosterTitle: { letterSpacing: 0.8, marginTop: Spacing.one },
   rosterList: { gap: Spacing.two },
+  lineupList: { gap: Spacing.one },
+  lineupPlayer: { fontSize: 14, textTransform: 'capitalize' },
   playerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   playerNumber: {
     width: 26,
