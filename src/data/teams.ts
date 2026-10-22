@@ -63,3 +63,14 @@ export async function saveCreatedTeam(team: CreatedTeam): Promise<void> {
     JSON.stringify([...savedTeams, team]),
   );
 }
+
+export async function updateCreatedTeam(team: CreatedTeam): Promise<void> {
+  const savedTeams = await getCreatedTeams();
+  const teamIndex = savedTeams.findIndex((savedTeam) => savedTeam.id === team.id);
+  if (teamIndex === -1) {
+    throw new Error('This team could not be found. Return to the teams screen and try again.');
+  }
+
+  savedTeams[teamIndex] = team;
+  await AsyncStorage.setItem(CREATED_TEAMS_STORAGE_KEY, JSON.stringify(savedTeams));
+}

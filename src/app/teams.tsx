@@ -180,16 +180,23 @@ export default function TeamsScreen() {
               const isExpanded = expandedId === team.id;
               const played = team.wins + team.draws + team.losses;
               const winRate = played === 0 ? 0 : Math.round((team.wins / played) * 100);
+              const lineup = Object.entries(team.lineup ?? {});
+              const startingPlayerNames = new Set(lineup.map(([, playerName]) => playerName));
+              const reservePlayers = team.roster.filter(
+                (player) => !startingPlayerNames.has(player.name),
+              );
 
               return (
-                <Pressable
-                  key={team.id}
-                  onPress={() => toggleTeam(team.id)}
-                  accessibilityRole="button"
-                  accessibilityState={{ expanded: isExpanded }}
-                  accessibilityLabel={`${team.name}, ${team.roster.length} players`}
-                  style={({ pressed }) => [pressed && styles.cardPressed]}>
-                  <ThemedView type="backgroundElement" style={styles.teamCard}>
+                <ThemedView key={team.id} type="backgroundElement" style={styles.teamCard}>
+                  <Pressable
+                    onPress={() => toggleTeam(team.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: isExpanded }}
+                    accessibilityLabel={`${team.name}, ${team.roster.length} players`}
+                    style={({ pressed }) => [
+                      styles.teamSummary,
+                      pressed && styles.cardPressed,
+                    ]}>
                     <View style={styles.cardHeader}>
                       <View style={[styles.teamBadge, { backgroundColor: team.color }]}>
                         <ThemedText style={styles.teamBadgeText}>
@@ -265,52 +272,96 @@ export default function TeamsScreen() {
                         })}
                       </View>
                     </View>
+                  </Pressable>
 
-                    {isExpanded ? (
+                  {isExpanded ? (
                       <View style={styles.rosterSection}>
                         <View style={styles.divider} />
                         <ThemedText type="small" themeColor="textSecondary" style={styles.rosterTitle}>
-                          ROSTER
+                          STARTING LINEUP
                         </ThemedText>
-                        <View style={styles.rosterList}>
-                          {team.roster.map((player) => (
-                            <View key={player.number} style={styles.playerRow}>
-                              <View style={[styles.playerNumber, { borderColor: team.color }]}>
-                                <ThemedText
-                                  style={[styles.playerNumberText, { color: team.color }]}>
-                                  {player.number}
-                                </ThemedText>
-                              </View>
-                              <ThemedText style={styles.playerName} numberOfLines={1}>
-                                {player.name}
-                              </ThemedText>
-                              <ThemedText type="small" themeColor="textSecondary">
-                                {POSITION_LABELS[player.position]}
-                              </ThemedText>
-                            </View>
-                          ))}
-                        </View>
-                        {team.lineup && Object.keys(team.lineup).length > 0 ? (
+                        {lineup.length > 0 ? (
+                          <View style={styles.rosterList}>
+                            {lineup.map(([slot, playerName], index) => {
+                              const player = team.roster.find(
+                                (rosterPlayer) => rosterPlayer.name === playerName,
+                              );
+                              return (
+                                <View key={slot} style={styles.playerRow}>
+                                  <View style={[styles.playerNumber, { borderColor: team.color }]}>
+                                    <ThemedText
+                                      style={[styles.playerNumberText, { color: team.color }]}>
+                                      {player?.number ?? index + 1}
+                                    </ThemedText>
+                                  </View>
+                                  <ThemedText style={styles.playerName} numberOfLines={1}>
+                                    {playerName}
+                                  </ThemedText>
+                                  <ThemedText type="small" themeColor="textSecondary">
+                                    {slot.replace(/-/g, ' ')}
+                                  </ThemedText>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        ) : (
+                          <ThemedText type="small" themeColor="textSecondary">
+                            No starting lineup has been set for this team.
+                          </ThemedText>
+                        )}
+                        {team.roster.length > 11 ? (
                           <>
                             <ThemedText
                               type="small"
                               themeColor="textSecondary"
                               style={styles.rosterTitle}>
-                              STARTING LINEUP
+                              RESERVES ({reservePlayers.length})
                             </ThemedText>
-                            <View style={styles.lineupList}>
-                              {Object.entries(team.lineup).map(([slot, playerName]) => (
-                                <ThemedText key={slot} style={styles.lineupPlayer}>
-                                  {slot.replace(/-/g, ' ')} · {playerName}
-                                </ThemedText>
-                              ))}
-                            </View>
+                            {reservePlayers.length > 0 ? (
+                              <View style={styles.rosterList}>
+                                {reservePlayers.map((player) => (
+                                  <View key={player.number} style={styles.playerRow}>
+                                    <View
+                                      style={[styles.playerNumber, { borderColor: team.color }]}>
+                                      <ThemedText
+                                        style={[styles.playerNumberText, { color: team.color }]}>
+                                        {player.number}
+                                      </ThemedText>
+                                    </View>
+                                    <ThemedText style={styles.playerName} numberOfLines={1}>
+                                      {player.name}
+                                    </ThemedText>
+                                    <ThemedText type="small" themeColor="textSecondary">
+                                      {POSITION_LABELS[player.position]}
+                                    </ThemedText>
+                                  </View>
+                                ))}
+                              </View>
+                            ) : (
+                              <ThemedText type="small" themeColor="textSecondary">
+                                No players outside the starting lineup.
+                              </ThemedText>
+                            )}
                           </>
                         ) : null}
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Edit ${team.name}`}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/create-team',
+                              params: { teamId: team.id },
+                            })
+                          }
+                          style={({ pressed }) => [
+                            styles.editTeamButton,
+                            pressed && styles.cardPressed,
+                          ]}>
+                          <ThemedText style={styles.editTeamButtonText}>Edit team</ThemedText>
+                        </Pressable>
                       </View>
-                    ) : null}
-                  </ThemedView>
-                </Pressable>
+                  ) : null}
+                </ThemedView>
               );
             })}
           </View>
@@ -379,6 +430,16 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     gap: Spacing.three,
   },
+  teamSummary: { gap: Spacing.three },
+  editTeamButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+    borderRadius: Spacing.two,
+    backgroundColor: '#1f7a4d',
+  },
+  editTeamButtonText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   teamBadge: {
     width: 48,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -7,13 +7,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { saveCreatedTeam } from '@/data/teams';
+import { getCreatedTeams, saveCreatedTeam, updateCreatedTeam } from '@/data/teams';
 import { useTheme } from '@/hooks/use-theme';
 
 const TEAM_COLOR_PALETTE = [
@@ -65,6 +65,8 @@ const PITCH_ROWS: { label: string; slots: PitchSlot[] }[] = [
 
 export default function CreateTeamScreen() {
   const router = useRouter();
+  const { teamId: routeTeamId } = useLocalSearchParams<{ teamId?: string }>();
+  const teamId = typeof routeTeamId === 'string' ? routeTeamId : undefined;
   const colors = useTheme();
   const [teamName, setTeamName] = useState('');
   const [captain, setCaptain] = useState('');
@@ -81,6 +83,78 @@ export default function CreateTeamScreen() {
   const [activePitchSlot, setActivePitchSlot] = useState<PitchSlot | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [teamLoadError, setTeamLoadError] = useState<string | null>(null);
+  const [isLoadingTeam, setIsLoadingTeam] = useState(Boolean(teamId));
+
+  useEffect(() => {
+    if (!teamId) return;
+    let isActive = true;
+
+    async function loadTeam() {
+      try {
+        const savedTeams = await getCreatedTeams();
+        const team = savedTeams.find((savedTeam) => savedTeam.id === teamId);
+        if (!team) throw new Error('This team could not be found.');
+
+        const loadedPlayers: PlayerDraft[] = team.roster.map((player, index) => ({
+          id: index + 1,
+          name: player.name,
+          position: player.position,
+        }));
+        const assignedPlayerIds = new Set<number>();
+        const loadedLineup = Object.fromEntries(
+          Object.entries(team.lineup).flatMap(([slotId, playerName]) => {
+            const player = loadedPlayers.find(
+              (candidate) =>
+                candidate.name === playerName && !assignedPlayerIds.has(candidate.id),
+            );
+            if (!player) return [];
+            assignedPlayerIds.add(player.id);
+            return [[slotId, player.id]];
+          }),
+        );
+
+        if (isActive) {
+          setTeamName(team.name);
+          setCaptain(team.captain);
+          setHomeGround(team.homeGround);
+          setTeamColor(team.color);
+          setPlayers(loadedPlayers);
+          setNextPlayerId(loadedPlayers.length + 1);
+          setLineup(loadedLineup);
+          setShowLineup(true);
+        }
+      } catch (error) {
+        if (isActive) {
+          setTeamLoadError(error instanceof Error ? error.message : 'Unable to load this team.');
+        }
+      } finally {
+        if (isActive) setIsLoadingTeam(false);
+      }
+    }
+
+    void loadTeam();
+    return () => {
+      isActive = false;
+    };
+  }, [teamId]);
+
+  function resetForm() {
+    setTeamName('');
+    setCaptain('');
+    setHomeGround('');
+    setTeamColor(TEAM_COLOR_PALETTE[0]);
+    setShowColorPalette(false);
+    setPlayers([]);
+    setPlayerName('');
+    setPlayerPosition(null);
+    setNextPlayerId(1);
+    setShowPlayers(false);
+    setShowLineup(false);
+    setLineup({});
+    setActivePitchSlot(null);
+    setSaveError(null);
+  }
 
   async function saveTeam() {
     const name = teamName.trim();
@@ -98,8 +172,8 @@ export default function CreateTeamScreen() {
     setIsSaving(true);
     setSaveError(null);
     try {
-      await saveCreatedTeam({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      const team = {
+        id: teamId ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name,
         color: teamColor,
         captain: captain.trim(),
@@ -110,7 +184,13 @@ export default function CreateTeamScreen() {
           position: player.position,
         })),
         lineup: savedLineup,
-      });
+      };
+      if (teamId) {
+        await updateCreatedTeam(team);
+      } else {
+        await saveCreatedTeam(team);
+      }
+      resetForm();
       router.replace('/teams');
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Unable to save this team.');
@@ -172,13 +252,26 @@ export default function CreateTeamScreen() {
 
           <View style={styles.header}>
             <ThemedText type="title" style={styles.title}>
-              Create a team
+              {teamId ? 'Edit team' : 'Create a team'}
             </ThemedText>
             <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-              Set up a squad for your next match.
+              {teamId ? 'Update your team details, squad, and starting lineup.' : 'Set up a squad for your next match.'}
             </ThemedText>
           </View>
 
+          {isLoadingTeam ? (
+            <ThemedText themeColor="textSecondary">Loading team…</ThemedText>
+          ) : teamLoadError ? (
+            <ThemedText accessibilityRole="alert" style={styles.saveError}>
+              {teamLoadError}
+            </ThemedText>
+          ) : (
+          <>
+          {saveError ? (
+            <ThemedText accessibilityRole="alert" style={styles.saveError}>
+              {saveError}
+            </ThemedText>
+          ) : null}
           <ThemedView type="backgroundElement" style={styles.formCard}>
             <View style={styles.field}>
               <ThemedText style={styles.label}>Team name</ThemedText>
@@ -452,28 +545,27 @@ export default function CreateTeamScreen() {
 
           <View style={styles.saveTeamSection}>
             <ThemedText themeColor="textSecondary" style={styles.saveTeamHint}>
-              Save your team and its squad to see it on the teams screen.
+              {teamId
+                ? 'Save your changes to update this team.'
+                : 'Save your team and its squad to see it on the teams screen.'}
             </ThemedText>
-            {saveError ? (
-              <ThemedText accessibilityRole="alert" style={styles.saveError}>
-                {saveError}
-              </ThemedText>
-            ) : null}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Save team"
-              disabled={isSaving || !teamName.trim()}
+              accessibilityLabel={teamId ? 'Save team changes' : 'Save team'}
+              disabled={isSaving || isLoadingTeam || !teamName.trim()}
               onPress={() => void saveTeam()}
               style={({ pressed }) => [
                 styles.saveTeamButton,
-                (isSaving || !teamName.trim()) && styles.saveTeamButtonDisabled,
+                (isSaving || isLoadingTeam || !teamName.trim()) && styles.saveTeamButtonDisabled,
                 pressed && styles.pressed,
               ]}>
               <ThemedText style={styles.saveTeamButtonText}>
-                {isSaving ? 'Saving team…' : 'Save team'}
+                {isSaving ? 'Saving team…' : teamId ? 'Save changes' : 'Save team'}
               </ThemedText>
             </Pressable>
           </View>
+          </>
+          )}
         </ScrollView>
         <Modal
           visible={showColorPalette}
