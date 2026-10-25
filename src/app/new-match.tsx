@@ -116,11 +116,6 @@ export default function NewMatchScreen() {
     return true;
   }
 
-  function saveMatch() {
-    if (!validateMatch()) return;
-    router.back();
-  }
-
   function goToNext() {
     if (!validateMatch()) return;
     
@@ -128,7 +123,7 @@ export default function NewMatchScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardView}>
@@ -341,37 +336,56 @@ export default function NewMatchScreen() {
           </ScrollView>
 
           <View style={[styles.footer, { backgroundColor: colors.background }]}>
-            <View style={styles.footerSummary}>
-              <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-                {selectedTeam ? selectedTeam.name : 'No team'}
-                {selectedOpponent ? ` vs ${selectedOpponent.name}` : ''}
-              </ThemedText>
-              <View style={styles.footerMetaRow}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {MATCH_DURATION_MINUTES} min
+            <View
+              accessibilityLabel={`${selectedTeam?.name ?? 'Your team'} versus ${selectedOpponent?.name ?? 'Opponent'}, ${MATCH_DURATION_MINUTES} minutes`}
+              style={styles.fixturePreview}>
+              <View style={styles.fixtureTeams}>
+                <View style={styles.fixtureTeam}>
+                  <View
+                    style={[
+                      styles.fixtureTeamBadge,
+                      { backgroundColor: selectedTeam?.color ?? HAIRLINE },
+                    ]}>
+                    <ThemedText style={styles.fixtureTeamBadgeText}>
+                      {selectedTeam?.name.slice(0, 2).toUpperCase() ?? '—'}
+                    </ThemedText>
+                  </View>
+                  <ThemedText style={styles.fixtureTeamName} numberOfLines={1}>
+                    {selectedTeam?.name ?? 'Your team'}
+                  </ThemedText>
+                </View>
+                <ThemedText style={styles.fixtureVs}>VS</ThemedText>
+                <View style={styles.fixtureTeam}>
+                  <View
+                    style={[
+                      styles.fixtureTeamBadge,
+                      { backgroundColor: selectedOpponent?.color ?? HAIRLINE },
+                    ]}>
+                    <ThemedText style={styles.fixtureTeamBadgeText}>
+                      {selectedOpponent?.name.slice(0, 2).toUpperCase() ?? '—'}
+                    </ThemedText>
+                  </View>
+                  <ThemedText style={styles.fixtureTeamName} numberOfLines={1}>
+                    {selectedOpponent?.name ?? 'Opponent'}
+                  </ThemedText>
+                </View>
+              </View>
+              <View style={styles.fixturePreviewMeta}>
+                <ThemedText style={styles.fixtureDuration}>
+                  {MATCH_DURATION_MINUTES} MIN
                 </ThemedText>
                 {location ? (
-                  <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-                    - {location}
+                  <ThemedText
+                    type="small"
+                    themeColor="textSecondary"
+                    style={styles.fixtureLocation}
+                    numberOfLines={1}>
+                    {location}
                   </ThemedText>
                 ) : null}
               </View>
             </View>
 
-            <View style={styles.footerButtons}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Save match"
-                onPress={saveMatch}
-                style={({ pressed }) => [
-                  styles.footerButton,
-                  styles.secondaryButton,
-                  pressed && styles.buttonPressed,
-                ]}>
-                <ThemedText style={styles.secondaryButtonText}>Save</ThemedText>
-              </Pressable>
-
-            </View>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -753,31 +767,53 @@ const styles = StyleSheet.create({
   footer: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: HAIRLINE,
-    paddingTop: Spacing.three,
-    paddingBottom: Spacing.three,
+    paddingTop: Spacing.one,
+    paddingBottom: Spacing.one,
+  },
+  fixturePreview: {
+    gap: 2,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: Spacing.one,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: HAIRLINE,
+    backgroundColor: 'rgba(128, 128, 128, 0.05)',
+  },
+  fixtureTeams: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: Spacing.two,
   },
-  footerSummary: { gap: 2 },
-  footerMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  footerButtons: { flexDirection: 'row', gap: Spacing.two },
-  footerButton: {
-    minHeight: 52,
-    borderRadius: Spacing.two,
+  fixtureTeam: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    gap: 2,
+  },
+  fixtureTeamBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  fixtureTeamBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
+  fixtureTeamName: { maxWidth: '100%', fontSize: 11, fontWeight: '600' },
+  fixtureVs: {
+    color: '#1f7a4d',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  fixturePreviewMeta: {
     flexDirection: 'row',
-    gap: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    minHeight: 14,
   },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: '#1f7a4d',
-  },
-  secondaryButton: {
-    paddingHorizontal: Spacing.four,
-    borderWidth: 1,
-    borderColor: HAIRLINE,
-    backgroundColor: 'transparent',
-  },
+  fixtureDuration: { color: '#1f7a4d', fontSize: 10, fontWeight: '800' },
+  fixtureLocation: { flexShrink: 1, fontSize: 11 },
   saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   saveButtonIcon: { color: '#fff', fontSize: 16, fontWeight: '700' },
   contentNextButton: {
@@ -791,6 +827,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
   },
-  secondaryButtonText: { fontSize: 16, fontWeight: '700', color: '#8f98a3' },
   buttonPressed: { opacity: 0.75 },
 });
