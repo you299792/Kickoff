@@ -74,3 +74,12 @@ export async function updateCreatedTeam(team: CreatedTeam): Promise<void> {
   savedTeams[teamIndex] = team;
   await AsyncStorage.setItem(CREATED_TEAMS_STORAGE_KEY, JSON.stringify(savedTeams));
 }
+
+export async function deleteCreatedTeam(teamId: string): Promise<void> {
+  const savedTeams = await getCreatedTeams();
+  const updatedTeams = savedTeams.filter((team) => team.id !== teamId);
+  if (updatedTeams.length === savedTeams.length) {
+    throw new Error('This team could not be found. Refresh the Teams screen and try again.');
+  }
+  await AsyncStorage.setItem(CREATED_TEAMS_STORAGE_KEY, JSON.stringify(updatedTeams));
+}

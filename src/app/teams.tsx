@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { CreatedTeam, getCreatedTeams } from '@/data/teams';
+import { CreatedTeam, deleteCreatedTeam, getCreatedTeams } from '@/data/teams';
 
 type Form = 'W' | 'D' | 'L';
 
@@ -60,6 +60,9 @@ export default function TeamsScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [createdTeams, setCreatedTeams] = useState<CreatedTeam[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -120,6 +123,22 @@ export default function TeamsScreen() {
 
   function toggleTeam(id: string) {
     setExpandedId((current) => (current === id ? null : id));
+  }
+
+  async function confirmDeleteTeam() {
+    if (!teamToDelete || isDeleting) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteCreatedTeam(teamToDelete.id);
+      setCreatedTeams((current) => current.filter((team) => team.id !== teamToDelete.id));
+      setExpandedId((current) => (current === teamToDelete.id ? null : current));
+      setTeamToDelete(null);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Unable to delete this team.');
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   return (
@@ -359,6 +378,19 @@ export default function TeamsScreen() {
                           ]}>
                           <ThemedText style={styles.editTeamButtonText}>Edit team</ThemedText>
                         </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Delete ${team.name}`}
+                          onPress={() => {
+                            setDeleteError(null);
+                            setTeamToDelete(team);
+                          }}
+                          style={({ pressed }) => [
+                            styles.deleteTeamButton,
+                            pressed && styles.cardPressed,
+                          ]}>
+                          <ThemedText style={styles.deleteTeamButtonText}>Delete team</ThemedText>
+                        </Pressable>
                       </View>
                   ) : null}
                 </ThemedView>
@@ -367,6 +399,63 @@ export default function TeamsScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+      <Modal
+        visible={teamToDelete !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!isDeleting) setTeamToDelete(null);
+        }}>
+        <View style={styles.confirmationModal}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cancel team deletion"
+            disabled={isDeleting}
+            onPress={() => setTeamToDelete(null)}
+            style={styles.confirmationBackdrop}
+          />
+          <ThemedView type="backgroundElement" style={styles.confirmationCard}>
+            <ThemedText type="subtitle" style={styles.confirmationTitle}>
+              Delete team?
+            </ThemedText>
+            <ThemedText themeColor="textSecondary">
+              {`Are you sure you want to delete ${teamToDelete?.name ?? 'this team'}? This cannot be undone.`}
+            </ThemedText>
+            {deleteError ? (
+              <ThemedText accessibilityRole="alert" style={styles.deleteError}>
+                {deleteError}
+              </ThemedText>
+            ) : null}
+            <View style={styles.confirmationActions}>
+              <Pressable
+                accessibilityRole="button"
+                disabled={isDeleting}
+                onPress={() => setTeamToDelete(null)}
+                style={({ pressed }) => [
+                  styles.cancelDeleteButton,
+                  pressed && !isDeleting && styles.cardPressed,
+                ]}>
+                <ThemedText themeColor="textSecondary" style={styles.cancelDeleteText}>
+                  Cancel
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Confirm delete team"
+                disabled={isDeleting}
+                onPress={() => void confirmDeleteTeam()}
+                style={({ pressed }) => [
+                  styles.confirmDeleteButton,
+                  (pressed || isDeleting) && styles.cardPressed,
+                ]}>
+                <ThemedText style={styles.confirmDeleteText}>
+                  {isDeleting ? 'Deleting...' : 'Delete'}
+                </ThemedText>
+              </Pressable>
+            </View>
+          </ThemedView>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -440,6 +529,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#1f7a4d',
   },
   editTeamButtonText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  deleteTeamButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: 'rgba(192, 57, 43, 0.4)',
+  },
+  deleteTeamButtonText: { color: '#c0392b', fontSize: 15, fontWeight: '700' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   teamBadge: {
     width: 48,
@@ -493,4 +592,46 @@ const styles = StyleSheet.create({
   },
   playerNumberText: { fontSize: 11, fontWeight: '700' },
   playerName: { flex: 1, fontWeight: '600' },
+  confirmationModal: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.four,
+  },
+  confirmationBackdrop: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  confirmationCard: {
+    width: '100%',
+    maxWidth: 380,
+    padding: Spacing.four,
+    borderRadius: Spacing.three,
+    gap: Spacing.three,
+  },
+  confirmationTitle: { fontSize: 22 },
+  deleteError: { color: '#c0392b', fontSize: 14 },
+  confirmationActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: Spacing.two,
+  },
+  cancelDeleteButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+  },
+  cancelDeleteText: { fontWeight: '700' },
+  confirmDeleteButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+    borderRadius: Spacing.two,
+    backgroundColor: '#c0392b',
+  },
+  confirmDeleteText: { color: '#fff', fontWeight: '700' },
 });
