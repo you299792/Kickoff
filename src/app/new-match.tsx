@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
@@ -9,24 +9,16 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { getCreatedTeams, type CreatedTeam } from '@/data/teams';
 import { useTheme } from '@/hooks/use-theme';
 
-type Team = { id: string; name: string; color: string };
-type NewTeamTarget = 'home' | 'opponent' | null;
-
-const initialTeams: Team[] = [
-  { id: 'riverside', name: 'Riverside FC', color: '#1f7a4d' },
-  { id: 'sunday', name: 'Sunday United', color: '#2f6fb5' },
-  { id: 'north-end', name: 'North End', color: '#8e44ad' },
-  { id: 'parkside', name: 'Parkside FC', color: '#c0392b' },
-  { id: 'athletic', name: 'Athletic Club', color: '#d97706' },
-];
+type Team = Pick<CreatedTeam, 'id' | 'name' | 'color'>;
 
 const MATCH_DURATION_MINUTES = 90;
 const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
@@ -35,8 +27,10 @@ export default function NewMatchScreen() {
   const router = useRouter();
   const colors = useTheme();
 
-  const [teams, setTeams] = useState<Team[]>(initialTeams);
-  const [selectedTeamId, setSelectedTeamId] = useState(initialTeams[0]?.id ?? '');
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamsLoading, setTeamsLoading] = useState(true);
+  const [teamsError, setTeamsError] = useState('');
+  const [selectedTeamId, setSelectedTeamId] = useState('');
   const [selectedOpponentId, setSelectedOpponentId] = useState('');
   const [openTeamDropdown, setOpenTeamDropdown] = useState<'home' | 'opponent' | null>(null);
   const [competition, setCompetition] = useState('League');
@@ -44,13 +38,47 @@ export default function NewMatchScreen() {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [notes, setNotes] = useState('');
-  const [newTeamName, setNewTeamName] = useState('');
-  const [newTeamTarget, setNewTeamTarget] = useState<NewTeamTarget>(null);
   const [error, setError] = useState('');
 
-  const canCreateTeam = newTeamName.trim().length > 0;
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      async function loadTeams() {
+        setTeamsLoading(true);
+        setTeamsError('');
+        try {
+          const savedTeams = await getCreatedTeams();
+          if (isActive) {
+            setTeams(savedTeams);
+            setSelectedTeamId((current) =>
+              savedTeams.some((team) => team.id === current) ? current : '',
+            );
+            setSelectedOpponentId((current) =>
+              savedTeams.some((team) => team.id === current) ? current : '',
+            );
+          }
+        } catch (loadError) {
+          if (isActive) {
+            setTeamsError(
+              loadError instanceof Error ? loadError.message : 'Unable to load saved teams.',
+            );
+          }
+        } finally {
+          if (isActive) setTeamsLoading(false);
+        }
+      }
+
+      void loadTeams();
+      return () => {
+        isActive = false;
+      };
+    }, []),
+  );
+
   const selectedTeam = teams.find((team) => team.id === selectedTeamId);
   const selectedOpponent = teams.find((team) => team.id === selectedOpponentId);
+  const opponentTeams = teams.filter((team) => team.id !== selectedTeamId);
 
   function selectHomeTeam(id: string) {
     setSelectedTeamId(id);
@@ -65,33 +93,6 @@ export default function NewMatchScreen() {
     setOpenTeamDropdown(null);
     if (id === selectedTeamId) setSelectedTeamId('');
     setError('');
-  }
-
-  function createTeam() {
-    if (!canCreateTeam || !newTeamTarget) return;
-    const team: Team = {
-      id: `team-${Date.now()}`,
-      name: newTeamName.trim(),
-      color: '#0f766e',
-    };
-    setTeams((current) => [...current, team]);
-
-    if (newTeamTarget === 'home') {
-      setSelectedTeamId(team.id);
-      if (team.id === selectedOpponentId) setSelectedOpponentId('');
-    } else {
-      setSelectedOpponentId(team.id);
-      if (team.id === selectedTeamId) setSelectedTeamId('');
-    }
-
-    setNewTeamName('');
-    setNewTeamTarget(null);
-    setError('');
-  }
-
-  function cancelNewTeam() {
-    setNewTeamTarget(null);
-    setNewTeamName('');
   }
 
   function validateMatch() {
@@ -174,7 +175,11 @@ export default function NewMatchScreen() {
               title="Your team"
               required
               description="Pick the squad you're recording for.">
-              {teams.length > 0 ? (
+              {teamsLoading ? (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.helperText}>
+                  Loading saved teams...
+                </ThemedText>
+              ) : teams.length > 0 ? (
                 <TeamDropdown
                   teams={teams}
                   selectedTeam={selectedTeam}
@@ -187,10 +192,9 @@ export default function NewMatchScreen() {
                 />
               ) : (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.helperText}>
-                  You need a team before you can record a match.
+                  Create a team from the Teams screen before setting up a match.
                 </ThemedText>
               )}
-
             </FormSection>
 
             {/* 2. Opponent */}
@@ -199,9 +203,13 @@ export default function NewMatchScreen() {
               title="Opponent"
               required
               description="Pick the team you're playing against.">
-              {teams.filter((team) => team.id !== selectedTeamId).length > 0 ? (
+              {teamsLoading ? (
+                <ThemedText type="small" themeColor="textSecondary" style={styles.helperText}>
+                  Loading saved teams...
+                </ThemedText>
+              ) : opponentTeams.length > 0 ? (
                 <TeamDropdown
-                  teams={teams.filter((team) => team.id !== selectedTeamId)}
+                  teams={opponentTeams}
                   selectedTeam={selectedOpponent}
                   placeholder="Choose an opponent"
                   expanded={openTeamDropdown === 'opponent'}
@@ -212,10 +220,9 @@ export default function NewMatchScreen() {
                 />
               ) : (
                 <ThemedText type="small" themeColor="textSecondary" style={styles.helperText}>
-                  Add another team to use as your opponent.
+                  Create another team from the Teams screen to select an opponent.
                 </ThemedText>
               )}
-
             </FormSection>
 
             {/* 3. Fixture details */}
@@ -305,6 +312,13 @@ export default function NewMatchScreen() {
                 {notes.length}/200
               </ThemedText>
             </FormSection>
+
+            {teamsError ? (
+              <View style={styles.errorBox}>
+                <ThemedText style={styles.errorIcon}>!</ThemedText>
+                <ThemedText style={styles.errorText}>{teamsError}</ThemedText>
+              </View>
+            ) : null}
 
             {error ? (
               <View style={styles.errorBox}>
@@ -490,57 +504,6 @@ function TeamOption({ team, selected, onPress }: TeamOptionProps) {
   );
 }
 
-type NewTeamInputProps = {
-  value: string;
-  onChangeText: (value: string) => void;
-  canCreate: boolean;
-  onSubmit: () => void;
-  onCancel: () => void;
-  textColor: string;
-};
-
-function NewTeamInput({
-  value,
-  onChangeText,
-  canCreate,
-  onSubmit,
-  onCancel,
-  textColor,
-}: NewTeamInputProps) {
-  return (
-    <View style={styles.createTeamRow}>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder="Team name"
-        placeholderTextColor="#8f98a3"
-        accessibilityLabel="New team name"
-        style={[styles.input, { color: textColor }]}
-        returnKeyType="done"
-        autoFocus
-        onSubmitEditing={onSubmit}
-      />
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Create team"
-        disabled={!canCreate}
-        onPress={onSubmit}
-        style={[styles.smallButton, !canCreate && styles.buttonDisabled]}>
-        <ThemedText style={styles.smallButtonText}>Add</ThemedText>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Cancel new team"
-        onPress={onCancel}
-        style={styles.cancelButton}>
-        <ThemedText themeColor="textSecondary" style={styles.cancelButtonText}>
-          X
-        </ThemedText>
-      </Pressable>
-    </View>
-  );
-}
-
 type FieldProps = {
   label: string;
   value: string;
@@ -709,26 +672,6 @@ const styles = StyleSheet.create({
   radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
   helperText: { marginTop: -Spacing.one },
 
-  addTeamButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.two,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: HAIRLINE,
-  },
-  addTeamText: { color: '#1f7a4d', fontWeight: '600' },
-
-  createTeamRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  cancelButton: {
-    width: 46,
-    height: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButtonText: { fontSize: 16, fontWeight: '600' },
-
   field: { gap: Spacing.two, flex: 1 },
   label: { fontSize: 14, fontWeight: '700' },
   input: {
@@ -741,16 +684,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   multilineInput: { minHeight: 92, paddingTop: Spacing.two, paddingBottom: Spacing.two },
-  smallButton: {
-    height: 46,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.two,
-    backgroundColor: '#1f7a4d',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  smallButtonText: { color: '#fff', fontWeight: '700' },
-  buttonDisabled: { opacity: 0.4 },
   fieldRow: { flexDirection: 'row', gap: Spacing.two },
   halfField: { flex: 1 },
 
