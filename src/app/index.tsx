@@ -1,11 +1,12 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { getMatchFixtures, type MatchFixture } from '@/data/matches';
 
 type Result = 'W' | 'D' | 'L';
 
@@ -78,6 +79,33 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [upcomingMatches, setUpcomingMatches] = useState<MatchFixture[]>([]);
+  const [fixturesError, setFixturesError] = useState('');
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      async function loadUpcomingMatches() {
+        setFixturesError('');
+        try {
+          const matches = await getMatchFixtures();
+          if (isActive) {
+            setUpcomingMatches(matches.filter((match) => match.status !== 'completed'));
+          }
+        } catch (loadError) {
+          if (isActive) {
+            setFixturesError(
+              loadError instanceof Error ? loadError.message : 'Unable to load saved fixtures.',
+            );
+          }
+        }
+      }
+      void loadUpcomingMatches();
+      return () => {
+        isActive = false;
+      };
+    }, []),
+  );
 
   const summary = useMemo(() => {
     const played = matchHistory.length;
@@ -115,6 +143,10 @@ export default function HomeScreen() {
     router.push('/new-match');
   }
 
+  function openMatch(matchId: string) {
+    router.push({ pathname: '/live-match', params: { matchId } });
+  }
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -143,6 +175,63 @@ export default function HomeScreen() {
               ))}
             </View>
           </ThemedView>
+
+          {upcomingMatches.length > 0 || fixturesError ? (
+            <View style={styles.upcomingSection}>
+              <View style={styles.historyHeader}>
+                <ThemedText type="subtitle" style={styles.sectionTitle}>
+                  Upcoming matches
+                </ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {upcomingMatches.length}
+                </ThemedText>
+              </View>
+              {fixturesError ? (
+                <ThemedText style={styles.fixturesError}>{fixturesError}</ThemedText>
+              ) : null}
+              {upcomingMatches.map((match) => (
+                <ThemedView
+                  key={match.id}
+                  type="backgroundElement"
+                  style={styles.upcomingCard}>
+                  <View style={styles.upcomingTeams}>
+                    {[match.homeTeam, match.awayTeam].map((team, index) => (
+                      <View key={team.id} style={styles.upcomingTeam}>
+                        <View style={[styles.upcomingBadge, { backgroundColor: team.color }]}>
+                          <ThemedText style={styles.upcomingBadgeText}>
+                            {team.name.slice(0, 2).toUpperCase()}
+                          </ThemedText>
+                        </View>
+                        <ThemedText style={styles.upcomingTeamName} numberOfLines={1}>
+                          {team.name}
+                        </ThemedText>
+                        {index === 0 ? (
+                          <ThemedText themeColor="textSecondary" style={styles.upcomingVs}>
+                            VS
+                          </ThemedText>
+                        ) : null}
+                      </View>
+                    ))}
+                  </View>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.upcomingMeta}>
+                    {[match.competition, match.date, match.venue].filter(Boolean).join(' · ')}
+                  </ThemedText>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${match.status === 'in-progress' ? 'Resume' : 'Open'} match between ${match.homeTeam.name} and ${match.awayTeam.name}`}
+                    onPress={() => openMatch(match.id)}
+                    style={({ pressed }) => [
+                      styles.upcomingAction,
+                      pressed && styles.chipPressed,
+                    ]}>
+                    <ThemedText style={styles.upcomingActionText}>
+                      {match.status === 'in-progress' ? 'Resume match' : 'Start match'}
+                    </ThemedText>
+                  </Pressable>
+                </ThemedView>
+              ))}
+            </View>
+          ) : null}
 
           <View style={styles.historyHeader}>
             <ThemedText type="subtitle" style={styles.sectionTitle}>
@@ -335,6 +424,62 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     borderRadius: Spacing.three,
     marginBottom: Spacing.four,
+  },
+  upcomingSection: {
+    marginBottom: Spacing.four,
+  },
+  upcomingCard: {
+    marginBottom: Spacing.two,
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: HAIRLINE,
+  },
+  upcomingTeams: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  upcomingTeam: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  upcomingBadge: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 17,
+  },
+  upcomingBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  upcomingTeamName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  upcomingVs: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  upcomingMeta: {
+    marginTop: Spacing.two,
+  },
+  upcomingAction: {
+    alignSelf: 'flex-start',
+    marginTop: Spacing.two,
+    paddingVertical: Spacing.one,
+  },
+  upcomingActionText: {
+    color: '#1f7a4d',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  fixturesError: {
+    marginBottom: Spacing.two,
+    color: '#c0392b',
   },
   statsRow: {
     flexDirection: 'row',

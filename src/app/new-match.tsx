@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { createMatchId, getCurrentTimestamp, saveMatchFixture, type MatchFixture } from '@/data/matches';
 import { getCreatedTeams, type CreatedTeam } from '@/data/teams';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -62,9 +63,10 @@ export default function NewMatchScreen() {
   const [competition, setCompetition] = useState('League');
   const [location, setLocation] = useState('');
   const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
+  const time = '';
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
+  const [savingMatch, setSavingMatch] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -193,6 +195,55 @@ export default function NewMatchScreen() {
     }));
     setOpenLineupSlot(null);
     setCurrentStep(2);
+  }
+
+  async function saveFixture(status: MatchFixture['status']) {
+    if (!selectedTeam || !selectedOpponent) return;
+    setSavingMatch(true);
+    setError('');
+    const matchId = createMatchId();
+    const match: MatchFixture = {
+      id: matchId,
+      homeTeam: {
+        id: selectedTeam.id,
+        name: selectedTeam.name,
+        color: selectedTeam.color,
+        lineup: matchLineups[selectedTeam.id] ?? { ...selectedTeam.lineup },
+        roster: selectedTeam.roster,
+      },
+      awayTeam: {
+        id: selectedOpponent.id,
+        name: selectedOpponent.name,
+        color: selectedOpponent.color,
+        lineup: matchLineups[selectedOpponent.id] ?? { ...selectedOpponent.lineup },
+        roster: selectedOpponent.roster,
+      },
+      date,
+      time,
+      competition: competition.trim() || 'Friendly',
+      venue: location.trim(),
+      notes: notes.trim(),
+      status,
+      homeGoals: 0,
+      awayGoals: 0,
+      elapsedSeconds: 0,
+      startedAt: status === 'in-progress' ? getCurrentTimestamp() : null,
+      goals: [],
+      cards: [],
+    };
+
+    try {
+      await saveMatchFixture(match);
+      if (status === 'in-progress') {
+        router.push({ pathname: '/live-match', params: { matchId } });
+      } else {
+        router.replace('/');
+      }
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Unable to save this match.');
+    } finally {
+      setSavingMatch(false);
+    }
   }
 
   return (
@@ -488,27 +539,41 @@ export default function NewMatchScreen() {
                 </ThemedView>
 
                 <ThemedText type="small" themeColor="textSecondary" style={styles.reviewFooterNote}>
-                  Review the fixture details before continuing.
+                  Start now or save the fixture to play later.
                 </ThemedText>
+                {error ? (
+                  <View style={styles.errorBox}>
+                    <ThemedText style={styles.errorIcon}>!</ThemedText>
+                    <ThemedText style={styles.errorText}>{error}</ThemedText>
+                  </View>
+                ) : null}
                 <View style={styles.matchReviewActions}>
                   <Pressable
                     accessibilityRole="button"
-                    onPress={() => setCurrentStep(1)}
+                    accessibilityLabel="Start match"
+                    accessibilityState={{ disabled: savingMatch }}
+                    disabled={savingMatch}
+                    onPress={() => void saveFixture('in-progress')}
                     style={({ pressed }) => [
-                      styles.matchReviewEditButton,
+                      styles.contentNextButton,
                       pressed && styles.buttonPressed,
                     ]}>
-                    <ThemedText style={styles.matchReviewEditText}>Edit fixture</ThemedText>
+                    <ThemedText style={styles.saveButtonText}>
+                      {savingMatch ? 'Saving…' : 'Start match'}
+                    </ThemedText>
                   </Pressable>
                   <Pressable
                     accessibilityRole="button"
-                    onPress={() => setCurrentStep(2)}
+                    accessibilityLabel="Save fixture for later"
+                    accessibilityState={{ disabled: savingMatch }}
+                    disabled={savingMatch}
+                    onPress={() => void saveFixture('scheduled')}
                     style={({ pressed }) => [
-                      styles.contentNextButton,
+                      styles.matchReviewEditButton,
                       styles.matchReviewLineupAction,
                       pressed && styles.buttonPressed,
                     ]}>
-                    <ThemedText style={styles.saveButtonText}>Edit lineups</ThemedText>
+                    <ThemedText style={styles.matchReviewEditText}>Save for later</ThemedText>
                   </Pressable>
                 </View>
               </>
