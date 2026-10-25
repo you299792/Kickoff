@@ -32,9 +32,33 @@ function formatClock(seconds: number) {
   return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
 }
 
-function formatGoalTime(seconds: number) {
-  const minutes = Math.floor(Math.max(0, seconds) / 60);
-  return `${minutes}' · ${formatClock(seconds)}`;
+function getMatchClock(
+  seconds: number,
+  firstHalfAdditionalMinutes: number,
+  secondHalfAdditionalMinutes: number,
+) {
+  const firstHalfLength = 45 * 60;
+  const firstHalfEnd = firstHalfLength + firstHalfAdditionalMinutes * 60;
+  const elapsed = Math.max(0, seconds);
+
+  if (elapsed < firstHalfLength) return formatClock(elapsed);
+  if (elapsed < firstHalfEnd) {
+    return `45+${formatClock(elapsed - firstHalfLength)}`;
+  }
+
+  const secondHalfElapsed = elapsed - firstHalfEnd;
+  if (secondHalfElapsed < firstHalfLength) {
+    return formatClock(firstHalfLength + secondHalfElapsed);
+  }
+  return `90+${formatClock(secondHalfElapsed - firstHalfLength)}`;
+}
+
+function formatGoalTime(
+  seconds: number,
+  firstHalfAdditionalMinutes: number,
+  secondHalfAdditionalMinutes: number,
+) {
+  return `${getMatchClock(seconds, firstHalfAdditionalMinutes, secondHalfAdditionalMinutes)}'`;
 }
 
 type MatchPlayerOption = { number?: number; name: string; position?: string };
@@ -109,6 +133,25 @@ export default function LiveMatchScreen() {
     ? match.elapsedSeconds +
       (match.startedAt ? Math.max(0, now - match.startedAt) / 1000 : 0)
     : 0;
+  const firstHalfEndSeconds = match
+    ? 45 * 60 + match.firstHalfAdditionalMinutes * 60
+    : 45 * 60;
+  const secondHalfElapsed = Math.max(0, elapsedSeconds - firstHalfEndSeconds);
+  const firstHalfAdditionalTimeVisible =
+    Boolean(match) &&
+    elapsedSeconds >= 40 * 60 &&
+    elapsedSeconds < firstHalfEndSeconds;
+  const secondHalfAdditionalTimeVisible =
+    Boolean(match) &&
+    secondHalfElapsed >= 40 * 60 &&
+    secondHalfElapsed < 45 * 60 + (match?.secondHalfAdditionalMinutes ?? 0) * 60;
+  const matchClock = match
+    ? getMatchClock(
+        elapsedSeconds,
+        match.firstHalfAdditionalMinutes,
+        match.secondHalfAdditionalMinutes,
+      )
+    : '00:00';
   const selectedPlayers = useMemo(
     () => (selectedScoringTeam ? getTeamPlayers(selectedScoringTeam) : []),
     [selectedScoringTeam],
@@ -127,6 +170,17 @@ export default function LiveMatchScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function setAdditionalTime(half: 'first' | 'second', minutes: number) {
+    if (!match || busy) return;
+    void persistMatch({
+      ...match,
+      firstHalfAdditionalMinutes:
+        half === 'first' ? minutes : match.firstHalfAdditionalMinutes,
+      secondHalfAdditionalMinutes:
+        half === 'second' ? minutes : match.secondHalfAdditionalMinutes,
+    });
   }
 
   function toggleTimer() {
@@ -268,7 +322,7 @@ export default function LiveMatchScreen() {
                       <ThemedText style={styles.scoreSeparator}>:</ThemedText>
                       <ThemedText style={styles.score}>{match.awayGoals}</ThemedText>
                     </View>
-                    <ThemedText style={styles.timerValue}>{formatClock(elapsedSeconds)}</ThemedText>
+                    <ThemedText style={styles.timerValue}>{matchClock}</ThemedText>
                     <ThemedText themeColor="textSecondary" style={styles.clockCaption}>
                       {match.startedAt ? 'MATCH IN PROGRESS' : 'MATCH CLOCK'}
                     </ThemedText>
@@ -333,6 +387,108 @@ export default function LiveMatchScreen() {
 
               {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
 
+              {firstHalfAdditionalTimeVisible ? (
+                <ThemedView type="backgroundElement" style={styles.additionalTimeCard}>
+                  <View style={styles.additionalTimeHeader}>
+                    <View style={styles.additionalTimeBadge}>
+                      <ThemedText style={styles.additionalTimeBadgeText}>45+</ThemedText>
+                    </View>
+                    <View style={styles.additionalTimeInfo}>
+                      <ThemedText style={styles.additionalTimeTitle}>
+                        First-half added time
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Set the referee&apos;s allowance
+                      </ThemedText>
+                    </View>
+                    <ThemedText style={styles.addedTimeValue}>
+                      +{match.firstHalfAdditionalMinutes}&apos;
+                    </ThemedText>
+                  </View>
+                  <View style={styles.additionalTimeOptions}>
+                    {[1, 2, 3, 4, 5].map((minutes) => (
+                      <Pressable
+                        key={minutes}
+                        accessibilityRole="button"
+                        accessibilityState={{
+                          selected: match.firstHalfAdditionalMinutes === minutes,
+                          disabled: busy,
+                        }}
+                        accessibilityLabel={`Set first-half added time to ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`}
+                        disabled={busy}
+                        onPress={() => setAdditionalTime('first', minutes)}
+                        style={({ pressed }) => [
+                          styles.additionalTimeOption,
+                          match.firstHalfAdditionalMinutes === minutes &&
+                            styles.additionalTimeOptionSelected,
+                          pressed && styles.pressed,
+                          busy && styles.disabled,
+                        ]}>
+                        <ThemedText
+                          style={[
+                            styles.additionalTimeOptionText,
+                            match.firstHalfAdditionalMinutes === minutes &&
+                              styles.additionalTimeOptionTextSelected,
+                          ]}>
+                          +{minutes}
+                        </ThemedText>
+                      </Pressable>
+                    ))}
+                  </View>
+                </ThemedView>
+              ) : null}
+
+              {secondHalfAdditionalTimeVisible ? (
+                <ThemedView type="backgroundElement" style={styles.additionalTimeCard}>
+                  <View style={styles.additionalTimeHeader}>
+                    <View style={[styles.additionalTimeBadge, styles.secondHalfBadge]}>
+                      <ThemedText style={styles.additionalTimeBadgeText}>90+</ThemedText>
+                    </View>
+                    <View style={styles.additionalTimeInfo}>
+                      <ThemedText style={styles.additionalTimeTitle}>
+                        Second-half added time
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Set the referee&apos;s allowance
+                      </ThemedText>
+                    </View>
+                    <ThemedText style={styles.addedTimeValue}>
+                      +{match.secondHalfAdditionalMinutes}&apos;
+                    </ThemedText>
+                  </View>
+                  <View style={styles.additionalTimeOptions}>
+                    {[1, 2, 3, 4, 5].map((minutes) => (
+                      <Pressable
+                        key={minutes}
+                        accessibilityRole="button"
+                        accessibilityState={{
+                          selected: match.secondHalfAdditionalMinutes === minutes,
+                          disabled: busy,
+                        }}
+                        accessibilityLabel={`Set second-half added time to ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`}
+                        disabled={busy}
+                        onPress={() => setAdditionalTime('second', minutes)}
+                        style={({ pressed }) => [
+                          styles.additionalTimeOption,
+                          match.secondHalfAdditionalMinutes === minutes &&
+                            styles.additionalTimeOptionSelected,
+                          pressed && styles.pressed,
+                          busy && styles.disabled,
+                        ]}>
+                        <ThemedText
+                          style={[
+                            styles.additionalTimeOptionText,
+                            match.secondHalfAdditionalMinutes === minutes &&
+                              styles.additionalTimeOptionTextSelected,
+                          ]}>
+                          +{minutes}
+                        </ThemedText>
+                      </Pressable>
+                    ))}
+                  </View>
+                </ThemedView>
+              ) : null}
+
               <View style={styles.sectionHeader}>
                 <View>
                   <ThemedText type="subtitle" style={styles.sectionTitle}>Goal timeline</ThemedText>
@@ -368,7 +524,11 @@ export default function LiveMatchScreen() {
                           </ThemedText>
                         </View>
                         <ThemedText style={styles.goalTimestamp}>
-                          {formatGoalTime(goal.elapsedSeconds)}
+                          {formatGoalTime(
+                            goal.elapsedSeconds,
+                            match.firstHalfAdditionalMinutes,
+                            match.secondHalfAdditionalMinutes,
+                          )}
                         </ThemedText>
                       </View>
                     );
@@ -424,7 +584,11 @@ export default function LiveMatchScreen() {
                           </ThemedText>
                         </View>
                         <ThemedText style={styles.cardTimestamp}>
-                          {formatGoalTime(card.elapsedSeconds)}
+                          {formatGoalTime(
+                            card.elapsedSeconds,
+                            match.firstHalfAdditionalMinutes,
+                            match.secondHalfAdditionalMinutes,
+                          )}
                         </ThemedText>
                       </View>
                     );
@@ -494,7 +658,11 @@ export default function LiveMatchScreen() {
                   </ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
                     {selectedScoringTeam
-                      ? `${selectedScoringTeam.name} · ${formatGoalTime(elapsedSeconds)}`
+                      ? `${selectedScoringTeam.name} · ${formatGoalTime(
+                          elapsedSeconds,
+                          match?.firstHalfAdditionalMinutes ?? 0,
+                          match?.secondHalfAdditionalMinutes ?? 0,
+                        )}`
                       : `At ${formatClock(elapsedSeconds)} match time`}
                   </ThemedText>
                 </View>
@@ -904,6 +1072,52 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(128, 128, 128, 0.08)',
   },
   cardButtonText: { fontSize: 13, fontWeight: '700' },
+  additionalTimeCard: {
+    marginTop: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: HAIRLINE,
+  },
+  additionalTimeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  additionalTimeBadge: {
+    minWidth: 44,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.one,
+    borderRadius: Spacing.two,
+    backgroundColor: 'rgba(31, 122, 77, 0.12)',
+  },
+  secondHalfBadge: { backgroundColor: 'rgba(47, 111, 181, 0.14)' },
+  additionalTimeBadgeText: { color: '#1f7a4d', fontSize: 13, fontWeight: '800' },
+  additionalTimeInfo: { flex: 1, gap: 2 },
+  additionalTimeTitle: { fontSize: 14, fontWeight: '800' },
+  addedTimeValue: { color: '#1f7a4d', fontSize: 14, fontWeight: '800' },
+  additionalTimeOptions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginTop: Spacing.three,
+  },
+  additionalTimeOption: {
+    flex: 1,
+    minHeight: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+  },
+  additionalTimeOptionSelected: {
+    borderColor: '#1f7a4d',
+    backgroundColor: 'rgba(31, 122, 77, 0.12)',
+  },
+  additionalTimeOptionText: { fontSize: 14, fontWeight: '700' },
+  additionalTimeOptionTextSelected: { color: '#1f7a4d', fontWeight: '800' },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',

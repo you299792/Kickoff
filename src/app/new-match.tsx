@@ -230,6 +230,8 @@ export default function NewMatchScreen() {
       startedAt: status === 'in-progress' ? getCurrentTimestamp() : null,
       goals: [],
       cards: [],
+      firstHalfAdditionalMinutes: 0,
+      secondHalfAdditionalMinutes: 0,
     };
 
     try {

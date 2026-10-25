@@ -39,6 +39,8 @@ export type MatchFixture = {
   startedAt: number | null;
   goals: MatchGoal[];
   cards: MatchCard[];
+  firstHalfAdditionalMinutes: number;
+  secondHalfAdditionalMinutes: number;
 };
 
 const MATCHES_STORAGE_KEY = '@kickoff/matches';
@@ -117,7 +119,13 @@ function isMatchFixture(value: unknown): value is MatchFixture {
     (match.goals === undefined ||
       (Array.isArray(match.goals) && match.goals.every(isMatchGoal))) &&
     (match.cards === undefined ||
-      (Array.isArray(match.cards) && match.cards.every(isMatchCard)))
+      (Array.isArray(match.cards) && match.cards.every(isMatchCard))) &&
+    (match.firstHalfAdditionalMinutes === undefined ||
+      (typeof match.firstHalfAdditionalMinutes === 'number' &&
+        match.firstHalfAdditionalMinutes >= 0)) &&
+    (match.secondHalfAdditionalMinutes === undefined ||
+      (typeof match.secondHalfAdditionalMinutes === 'number' &&
+        match.secondHalfAdditionalMinutes >= 0))
   );
 }
 
@@ -133,6 +141,8 @@ export async function getMatchFixtures(): Promise<MatchFixture[]> {
     ...match,
     goals: match.goals ?? [],
     cards: match.cards ?? [],
+    firstHalfAdditionalMinutes: match.firstHalfAdditionalMinutes ?? 0,
+    secondHalfAdditionalMinutes: match.secondHalfAdditionalMinutes ?? 0,
   }));
 }
 
