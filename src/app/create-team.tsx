@@ -233,6 +233,12 @@ export default function CreateTeamScreen() {
     setActivePitchSlot(null);
   }
 
+  const activeStarterId = activePitchSlot ? lineup[activePitchSlot.id] : undefined;
+  const activeStarter = players.find((player) => player.id === activeStarterId);
+  const reservePlayers = players.filter(
+    (player) => player.name.trim().length > 0 && !Object.values(lineup).includes(player.id),
+  );
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -517,7 +523,7 @@ export default function CreateTeamScreen() {
                                       styles.pitchPlayerCode,
                                       assignedPlayer && styles.pitchPlayerTextAssigned,
                                     ]}>
-                                    {assignedPlayer ? '✓' : slot.label}
+                                    {assignedPlayer ? assignedPlayer.id : slot.label}
                                   </ThemedText>
                                   <ThemedText
                                     numberOfLines={1}
@@ -647,10 +653,14 @@ export default function CreateTeamScreen() {
               <View style={styles.playerPickerHeader}>
                 <View style={styles.playerPickerHeading}>
                   <ThemedText style={styles.playerPickerTitle}>
-                    Choose {activePitchSlot?.label}
+                    {activeStarter
+                      ? `Replace ${activePitchSlot?.label}`
+                      : `Choose ${activePitchSlot?.label}`}
                   </ThemedText>
                   <ThemedText themeColor="textSecondary" style={styles.playerPickerHint}>
-                    Select an available squad player.
+                    {activeStarter
+                      ? 'Choose a reserve to take this position. The current starter will move to the reserves.'
+                      : 'Choose a reserve player for this position.'}
                   </ThemedText>
                 </View>
                 <Pressable
@@ -664,41 +674,73 @@ export default function CreateTeamScreen() {
                   </ThemedText>
                 </Pressable>
               </View>
+              {activeStarter ? (
+                <View style={styles.currentStarterCard}>
+                  <View style={styles.currentStarterBadge}>
+                    <ThemedText style={styles.currentStarterBadgeText}>
+                      {activeStarter.id}
+                    </ThemedText>
+                  </View>
+                  <View style={styles.currentStarterInfo}>
+                    <ThemedText style={styles.currentStarterName}>
+                      {activeStarter.name.trim()}
+                    </ThemedText>
+                    <ThemedText themeColor="textSecondary" style={styles.currentStarterPosition}>
+                      Current starter · {activeStarter.position}
+                    </ThemedText>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Keep ${activeStarter.name} in this position`}
+                    onPress={() => assignPlayerToSlot(activeStarter.id)}
+                    style={({ pressed }) => [
+                      styles.keepStarterButton,
+                      pressed && styles.pressed,
+                    ]}>
+                    <ThemedText style={styles.keepStarterText}>Keep</ThemedText>
+                  </Pressable>
+                </View>
+              ) : null}
+              <View style={styles.reservePickerHeader}>
+                <ThemedText style={styles.reservePickerTitle}>Available from reserves</ThemedText>
+                <ThemedText themeColor="textSecondary" style={styles.reservePickerCount}>
+                  {reservePlayers.length}
+                </ThemedText>
+              </View>
               <ScrollView style={styles.playerPickerList} keyboardShouldPersistTaps="handled">
-                {players
-                  .filter(
-                    (player) =>
-                      player.name.trim().length > 0 &&
-                      (!Object.values(lineup).includes(player.id) ||
-                        lineup[activePitchSlot?.id ?? ''] === player.id),
-                  )
-                  .map((player) => (
+                {reservePlayers.map((player) => (
                     <Pressable
                       key={player.id}
                       accessibilityRole="button"
+                      accessibilityLabel={`Replace current starter with ${player.name.trim()}, ${player.position}`}
                       onPress={() => assignPlayerToSlot(player.id)}
                       style={({ pressed }) => [
                         styles.playerPickerOption,
                         pressed && styles.pressed,
                       ]}>
                       <View style={styles.playerPickerBadge}>
-                        <ThemedText style={styles.playerPickerBadgeText}>
-                          {player.name.slice(0, 1).toUpperCase()}
+                        <ThemedText style={styles.playerPickerBadgeText}>{player.id}</ThemedText>
+                      </View>
+                      <View style={styles.reservePlayerInfo}>
+                        <ThemedText style={styles.playerPickerName} numberOfLines={1}>
+                          {player.name.trim()}
+                        </ThemedText>
+                        <ThemedText themeColor="textSecondary" style={styles.playerPickerPosition}>
+                          {player.position}
                         </ThemedText>
                       </View>
-                      <ThemedText style={styles.playerPickerName}>{player.name.trim()}</ThemedText>
-                      <ThemedText themeColor="textSecondary" style={styles.playerPickerPosition}>
-                        {player.position ?? 'No position'}
-                      </ThemedText>
+                      <ThemedText style={styles.reserveReplaceIndicator}>↗</ThemedText>
                     </Pressable>
                   ))}
-                {players.every((player) => player.name.trim().length === 0) ? (
+                {reservePlayers.length === 0 ? (
                   <ThemedText themeColor="textSecondary" style={styles.playerPickerEmpty}>
-                    Add player names above before assigning them to the pitch.
+                    {players.length === 0
+                      ? 'Add players to the squad before setting the starting lineup.'
+                      : 'No reserves available. Add another player to replace this starter.'}
                   </ThemedText>
                 ) : null}
               </ScrollView>
-              {lineup[activePitchSlot?.id ?? ''] !== undefined ? (
+              {activeStarter ? (
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => assignPlayerToSlot(null)}
@@ -706,7 +748,7 @@ export default function CreateTeamScreen() {
                     styles.clearAssignment,
                     pressed && styles.pressed,
                   ]}>
-                  <ThemedText style={styles.clearAssignmentText}>Clear position</ThemedText>
+                  <ThemedText style={styles.clearAssignmentText}>Leave position empty</ThemedText>
                 </Pressable>
               ) : null}
             </ThemedView>
@@ -1008,12 +1050,55 @@ const styles = StyleSheet.create({
   playerPickerHint: { fontSize: 13, lineHeight: 19 },
   playerPickerClose: { paddingHorizontal: Spacing.one, paddingVertical: 0 },
   playerPickerCloseText: { fontSize: 26, lineHeight: 28 },
-  playerPickerList: { flexGrow: 0 },
-  playerPickerOption: {
-    minHeight: 56,
+  currentStarterCard: {
+    minHeight: 68,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
+    padding: Spacing.two,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 122, 77, 0.28)',
+    backgroundColor: 'rgba(31, 122, 77, 0.08)',
+  },
+  currentStarterBadge: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 19,
+    backgroundColor: '#1f7a4d',
+  },
+  currentStarterBadgeText: { color: '#fff', fontWeight: '800' },
+  currentStarterInfo: { flex: 1, gap: 2 },
+  currentStarterName: { fontSize: 14, fontWeight: '700' },
+  currentStarterPosition: { fontSize: 12 },
+  keepStarterButton: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: 999,
+    backgroundColor: '#1f7a4d',
+  },
+  keepStarterText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  reservePickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  reservePickerTitle: { fontSize: 14, fontWeight: '700' },
+  reservePickerCount: {
+    minWidth: 24,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  playerPickerList: { flexGrow: 0, maxHeight: 320 },
+  playerPickerOption: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.one,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(128,128,128,0.3)',
   },
@@ -1026,8 +1111,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#1f7a4d',
   },
   playerPickerBadgeText: { color: '#ffffff', fontWeight: '700' },
-  playerPickerName: { flex: 1, fontSize: 15, fontWeight: '600' },
+  reservePlayerInfo: { flex: 1, gap: 3 },
+  playerPickerName: { fontSize: 15, fontWeight: '600' },
   playerPickerPosition: { fontSize: 12 },
+  reserveReplaceIndicator: { color: '#1f7a4d', fontSize: 20, fontWeight: '700' },
   playerPickerEmpty: { paddingVertical: Spacing.three, fontSize: 14, lineHeight: 21 },
   clearAssignment: { alignItems: 'center', paddingVertical: Spacing.two },
   clearAssignmentText: { color: '#c0392b', fontWeight: '700' },

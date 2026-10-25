@@ -20,7 +20,28 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { getCreatedTeams, type CreatedTeam } from '@/data/teams';
 import { useTheme } from '@/hooks/use-theme';
 
-type Team = Pick<CreatedTeam, 'id' | 'name' | 'color'>;
+type Team = CreatedTeam;
+type MatchLineups = Record<string, Record<string, string>>;
+
+const MATCH_LINEUP_SLOTS = [
+  { id: 'left-forward', label: 'LW' },
+  { id: 'centre-forward', label: 'ST' },
+  { id: 'right-forward', label: 'RW' },
+  { id: 'left-midfield', label: 'LM' },
+  { id: 'centre-midfield', label: 'CM' },
+  { id: 'right-midfield', label: 'RM' },
+  { id: 'left-back', label: 'LB' },
+  { id: 'left-centre-back', label: 'CB' },
+  { id: 'right-centre-back', label: 'CB' },
+  { id: 'right-back', label: 'RB' },
+  { id: 'goalkeeper', label: 'GK' },
+];
+const MATCH_LINEUP_ROWS = [
+  MATCH_LINEUP_SLOTS.slice(0, 3),
+  MATCH_LINEUP_SLOTS.slice(3, 6),
+  MATCH_LINEUP_SLOTS.slice(6, 10),
+  MATCH_LINEUP_SLOTS.slice(10),
+];
 
 const MATCH_DURATION_MINUTES = 90;
 const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
@@ -35,6 +56,9 @@ export default function NewMatchScreen() {
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [selectedOpponentId, setSelectedOpponentId] = useState('');
   const [openTeamDropdown, setOpenTeamDropdown] = useState<'home' | 'opponent' | null>(null);
+  const [currentStep, setCurrentStep] = useState<1 | 2>(1);
+  const [matchLineups, setMatchLineups] = useState<MatchLineups>({});
+  const [openLineupSlot, setOpenLineupSlot] = useState<string | null>(null);
   const [competition, setCompetition] = useState('League');
   const [location, setLocation] = useState('');
   const [date, setDate] = useState('');
@@ -81,6 +105,31 @@ export default function NewMatchScreen() {
   const selectedTeam = teams.find((team) => team.id === selectedTeamId);
   const selectedOpponent = teams.find((team) => team.id === selectedOpponentId);
   const opponentTeams = teams.filter((team) => team.id !== selectedTeamId);
+  const lineupPickerTeam = [selectedTeam, selectedOpponent].find(
+    (team) => team !== undefined && openLineupSlot?.startsWith(`${team.id}:`),
+  );
+  const lineupPickerSlotId = lineupPickerTeam
+    ? openLineupSlot?.slice(lineupPickerTeam.id.length + 1)
+    : undefined;
+  const lineupPickerSlot = MATCH_LINEUP_SLOTS.find((slot) => slot.id === lineupPickerSlotId);
+  const lineupPicker =
+    lineupPickerTeam && lineupPickerSlot
+      ? {
+          team: lineupPickerTeam,
+          slot: lineupPickerSlot,
+          lineup: matchLineups[lineupPickerTeam.id] ?? lineupPickerTeam.lineup,
+        }
+      : undefined;
+  const currentMatchStarter = lineupPicker
+    ? lineupPicker.team.roster.find(
+        (player) => player.name === lineupPicker.lineup[lineupPicker.slot.id],
+      )
+    : undefined;
+  const matchReservePlayers = lineupPicker
+    ? lineupPicker.team.roster.filter(
+        (player) => !Object.values(lineupPicker.lineup).includes(player.name),
+      )
+    : [];
 
   function selectHomeTeam(id: string) {
     setSelectedTeamId(id);
@@ -95,6 +144,21 @@ export default function NewMatchScreen() {
     setOpenTeamDropdown(null);
     if (id === selectedTeamId) setSelectedTeamId('');
     setError('');
+  }
+
+  function updateMatchLineup(team: Team, slotId: string, playerName: string) {
+    setMatchLineups((current) => {
+      const currentLineup = current[team.id] ?? team.lineup;
+      const nextLineup = Object.fromEntries(
+        Object.entries(currentLineup).filter(
+          ([assignedSlot, assignedPlayer]) =>
+            assignedSlot !== slotId && (!playerName || assignedPlayer !== playerName),
+        ),
+      );
+      if (playerName) nextLineup[slotId] = playerName;
+      return { ...current, [team.id]: nextLineup };
+    });
+    setOpenLineupSlot(null);
   }
 
   function validateMatch() {
@@ -120,7 +184,15 @@ export default function NewMatchScreen() {
 
   function goToNext() {
     if (!validateMatch()) return;
-    
+    if (!selectedTeam || !selectedOpponent) return;
+
+    setMatchLineups((current) => ({
+      ...current,
+      [selectedTeam.id]: current[selectedTeam.id] ?? { ...selectedTeam.lineup },
+      [selectedOpponent.id]: current[selectedOpponent.id] ?? { ...selectedOpponent.lineup },
+    }));
+    setOpenLineupSlot(null);
+    setCurrentStep(2);
   }
 
   return (
@@ -137,7 +209,7 @@ export default function NewMatchScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
-                onPress={() => router.back()}
+                onPress={() => (currentStep === 1 ? router.back() : setCurrentStep(1))}
                 style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
                 <ThemedText themeColor="textSecondary" style={styles.backIcon}>
                   {'<'}
@@ -148,24 +220,30 @@ export default function NewMatchScreen() {
               </Pressable>
 
               <ThemedText type="title" style={styles.title}>
-                New match
+                {currentStep === 1 ? 'New match' : 'Review lineups'}
               </ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-                Set up the fixture before kickoff
+                {currentStep === 1
+                  ? 'Set up the fixture before kickoff'
+                  : 'Review or adjust the starting XI for this match.'}
               </ThemedText>
 
               <View style={styles.stepIndicator}>
                 <View style={[styles.stepDot, styles.stepDotActive]} />
                 <View style={styles.stepLine} />
-                <View style={styles.stepDot} />
+                <View style={[styles.stepDot, currentStep === 2 && styles.stepDotActive]} />
                 <View style={styles.stepLine} />
                 <View style={styles.stepDot} />
               </View>
               <ThemedText type="small" themeColor="textSecondary" style={styles.stepCaption}>
-                Step 1 of 3 - Fixture setup
+                {currentStep === 1
+                  ? 'Step 1 of 3 - Fixture setup'
+                  : 'Step 2 of 3 - Starting lineups'}
               </ThemedText>
             </View>
 
+            {currentStep === 1 ? (
+              <>
             {/* 1. Your team */}
             <FormSection
               step="1"
@@ -334,7 +412,179 @@ export default function NewMatchScreen() {
               <ThemedText style={styles.saveButtonText}>Next</ThemedText>
               <ThemedText style={styles.saveButtonIcon}>-&gt;</ThemedText>
             </Pressable>
+              </>
+            ) : selectedTeam && selectedOpponent ? (
+              <>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.matchOnlyNotice}>
+                  Changes here apply to this match only. Your saved team lineups will not be changed.
+                </ThemedText>
+                {[selectedTeam, selectedOpponent].map((team) => (
+                  <TeamLineupEditor
+                    key={team.id}
+                    team={team}
+                    lineup={matchLineups[team.id] ?? team.lineup}
+                    onSelectSlot={(slotId) => setOpenLineupSlot(`${team.id}:${slotId}`)}
+                  />
+                ))}
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setCurrentStep(1)}
+                  style={({ pressed }) => [
+                    styles.contentNextButton,
+                    pressed && styles.buttonPressed,
+                  ]}>
+                  <ThemedText style={styles.saveButtonText}>Back to fixture</ThemedText>
+                </Pressable>
+              </>
+            ) : null}
           </ScrollView>
+
+          <Modal
+            visible={currentStep === 2 && lineupPicker !== undefined}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setOpenLineupSlot(null)}>
+            <View style={styles.lineupPickerBackdrop}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close lineup player selection"
+                onPress={() => setOpenLineupSlot(null)}
+                style={StyleSheet.absoluteFill}
+              />
+              <ThemedView type="backgroundElement" style={styles.lineupPickerCard}>
+                <View style={styles.lineupPickerHeader}>
+                  <View style={styles.lineupPickerHeading}>
+                    <ThemedText style={styles.lineupPickerTitle}>
+                      {currentMatchStarter
+                        ? `Replace ${lineupPicker?.slot.label}`
+                        : `Choose ${lineupPicker?.slot.label}`}
+                    </ThemedText>
+                    <ThemedText themeColor="textSecondary" style={styles.lineupPickerHint}>
+                      {currentMatchStarter
+                        ? 'Choose a reserve to replace this starter. They will move to the reserves for this match.'
+                        : 'Choose a reserve player for this position.'}
+                    </ThemedText>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Close lineup player selection"
+                    onPress={() => setOpenLineupSlot(null)}
+                    hitSlop={8}
+                    style={styles.lineupPickerClose}>
+                    <ThemedText themeColor="textSecondary" style={styles.lineupPickerCloseText}>
+                      ×
+                    </ThemedText>
+                  </Pressable>
+                </View>
+
+                {currentMatchStarter ? (
+                  <View style={styles.currentMatchStarter}>
+                    <View
+                      style={[
+                        styles.currentMatchStarterBadge,
+                        { backgroundColor: lineupPicker?.team.color ?? '#1f7a4d' },
+                      ]}>
+                      <ThemedText style={styles.currentMatchStarterBadgeText}>
+                        {currentMatchStarter.number}
+                      </ThemedText>
+                    </View>
+                    <View style={styles.currentMatchStarterInfo}>
+                      <ThemedText style={styles.currentMatchStarterName}>
+                        {currentMatchStarter.name}
+                      </ThemedText>
+                      <ThemedText themeColor="textSecondary" style={styles.currentMatchStarterMeta}>
+                        Current starter · {currentMatchStarter.position}
+                      </ThemedText>
+                    </View>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Keep ${currentMatchStarter.name} in this position`}
+                      onPress={() => setOpenLineupSlot(null)}
+                      style={({ pressed }) => [
+                        styles.keepMatchStarterButton,
+                        pressed && styles.buttonPressed,
+                      ]}>
+                      <ThemedText style={styles.keepMatchStarterText}>Keep</ThemedText>
+                    </Pressable>
+                  </View>
+                ) : null}
+
+                <View style={styles.matchReserveHeader}>
+                  <ThemedText style={styles.matchReserveTitle}>Available from reserves</ThemedText>
+                  <ThemedText themeColor="textSecondary" style={styles.matchReserveCount}>
+                    {matchReservePlayers.length}
+                  </ThemedText>
+                </View>
+                <ScrollView
+                  style={styles.matchReserveList}
+                  keyboardShouldPersistTaps="handled">
+                  {matchReservePlayers.map((player) => (
+                    <Pressable
+                      key={`${player.number}-${player.name}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Replace current starter with ${player.name}, ${player.position}`}
+                      onPress={() => {
+                        if (lineupPicker) {
+                          updateMatchLineup(
+                            lineupPicker.team,
+                            lineupPicker.slot.id,
+                            player.name,
+                          );
+                        }
+                      }}
+                      style={({ pressed }) => [
+                        styles.matchReserveOption,
+                        pressed && styles.buttonPressed,
+                      ]}>
+                      <View
+                        style={[
+                          styles.matchReserveBadge,
+                          { backgroundColor: lineupPicker?.team.color ?? '#1f7a4d' },
+                        ]}>
+                        <ThemedText style={styles.matchReserveBadgeText}>
+                          {player.number}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.matchReserveInfo}>
+                        <ThemedText style={styles.matchReserveName} numberOfLines={1}>
+                          {player.name}
+                        </ThemedText>
+                        <ThemedText themeColor="textSecondary" style={styles.matchReservePosition}>
+                          {player.position}
+                        </ThemedText>
+                      </View>
+                      <ThemedText style={styles.matchReserveReplaceIcon}>↗</ThemedText>
+                    </Pressable>
+                  ))}
+                  {matchReservePlayers.length === 0 ? (
+                    <ThemedText
+                      type="small"
+                      themeColor="textSecondary"
+                      style={styles.matchReserveEmpty}>
+                      {lineupPicker?.team.roster.length === 0
+                        ? 'Add players to this team before setting the lineup.'
+                        : 'No reserves available. Add another player to replace this starter.'}
+                    </ThemedText>
+                  ) : null}
+                </ScrollView>
+                {currentMatchStarter && lineupPicker ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() =>
+                      updateMatchLineup(lineupPicker.team, lineupPicker.slot.id, '')
+                    }
+                    style={({ pressed }) => [
+                      styles.clearMatchPosition,
+                      pressed && styles.buttonPressed,
+                    ]}>
+                    <ThemedText style={styles.clearMatchPositionText}>
+                      Leave position empty
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
+              </ThemedView>
+            </View>
+          </Modal>
 
           <View style={[styles.footer, { backgroundColor: colors.background }]}>
             <View
@@ -516,6 +766,87 @@ function TeamOption({ team, selected, onPress }: TeamOptionProps) {
         {selected ? <View style={styles.radioDot} /> : null}
       </View>
     </Pressable>
+  );
+}
+
+type TeamLineupEditorProps = {
+  team: Team;
+  lineup: Record<string, string>;
+  onSelectSlot: (slotId: string) => void;
+};
+
+function TeamLineupEditor({
+  team,
+  lineup,
+  onSelectSlot,
+}: TeamLineupEditorProps) {
+  return (
+    <ThemedView type="backgroundElement" style={styles.lineupCard}>
+      <View style={styles.lineupTeamHeader}>
+        <View style={[styles.teamBadge, { backgroundColor: team.color }]}>
+          <ThemedText style={styles.teamBadgeText}>
+            {team.name.slice(0, 2).toUpperCase()}
+          </ThemedText>
+        </View>
+        <View style={styles.lineupTeamInfo}>
+          <ThemedText type="subtitle" numberOfLines={1}>
+            {team.name}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Starting lineup · {Object.keys(lineup).length}/11 selected
+          </ThemedText>
+        </View>
+      </View>
+
+      <View style={styles.matchPitch}>
+        <View style={styles.matchPitchHalfLine} />
+        <View style={styles.matchPitchCentreCircle} />
+        <View style={styles.matchPitchTopBox} />
+        <View style={styles.matchPitchBottomBox} />
+        <View style={styles.matchPitchRows}>
+          {MATCH_LINEUP_ROWS.map((row, rowIndex) => (
+            <View key={rowIndex} style={styles.matchPitchRow}>
+              {row.map((slot) => {
+                const selectedPlayer = lineup[slot.id];
+
+                return (
+                  <View key={slot.id}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`${slot.label}: ${selectedPlayer ?? 'Unassigned'}`}
+                      onPress={() => onSelectSlot(slot.id)}
+                      style={({ pressed }) => [
+                        styles.matchPitchPlayer,
+                        selectedPlayer && styles.matchPitchPlayerSelected,
+                        pressed && styles.pressed,
+                      ]}>
+                      <ThemedText
+                        style={[
+                          styles.matchPitchPlayerNumber,
+                          selectedPlayer && styles.matchPitchPlayerSelectedText,
+                        ]}>
+                        {selectedPlayer
+                          ? team.roster.find((player) => player.name === selectedPlayer)?.number ??
+                            '✓'
+                          : slot.label}
+                      </ThemedText>
+                      <ThemedText
+                        numberOfLines={1}
+                        style={[
+                          styles.matchPitchPlayerName,
+                          selectedPlayer && styles.matchPitchPlayerSelectedText,
+                        ]}>
+                        {selectedPlayer ?? 'Add player'}
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+          ))}
+        </View>
+      </View>
+    </ThemedView>
   );
 }
 
@@ -863,6 +1194,190 @@ const styles = StyleSheet.create({
   radioSelected: { borderColor: '#1f7a4d', backgroundColor: '#1f7a4d' },
   radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
   helperText: { marginTop: -Spacing.one },
+  matchOnlyNotice: {
+    marginBottom: Spacing.two,
+    padding: Spacing.three,
+    borderRadius: Spacing.two,
+    backgroundColor: 'rgba(31, 122, 77, 0.08)',
+    lineHeight: 20,
+  },
+  lineupCard: {
+    marginBottom: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: HAIRLINE,
+    gap: Spacing.two,
+  },
+  lineupTeamHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    marginBottom: Spacing.one,
+  },
+  lineupTeamInfo: { flex: 1, gap: 2 },
+  matchPitch: {
+    width: '100%',
+    aspectRatio: 0.78,
+    overflow: 'visible',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.75)',
+    borderRadius: Spacing.two,
+    backgroundColor: '#237a4b',
+  },
+  matchPitchHalfLine: {
+    position: 'absolute',
+    top: '50%',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+  },
+  matchPitchCentreCircle: {
+    position: 'absolute',
+    width: '34%',
+    aspectRatio: 1,
+    top: '50%',
+    left: '33%',
+    marginTop: '-17%',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.55)',
+    borderRadius: 999,
+  },
+  matchPitchTopBox: {
+    position: 'absolute',
+    width: '44%',
+    height: '12%',
+    top: 0,
+    left: '28%',
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  matchPitchBottomBox: {
+    position: 'absolute',
+    width: '44%',
+    height: '12%',
+    bottom: 0,
+    left: '28%',
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(255,255,255,0.55)',
+  },
+  matchPitchRows: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    justifyContent: 'space-around',
+    paddingVertical: '5%',
+  },
+  matchPitchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  matchPitchPosition: { position: 'relative', zIndex: 2 },
+  matchPitchPlayer: {
+    width: 68,
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderRadius: Spacing.two,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  matchPitchPlayerSelected: { backgroundColor: '#ffffff' },
+  matchPitchPlayerNumber: { color: '#ffffff', fontSize: 13, fontWeight: '800' },
+  matchPitchPlayerName: {
+    maxWidth: 64,
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  matchPitchPlayerSelectedText: { color: '#145c3a' },
+  lineupPickerBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: Spacing.four,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  lineupPickerCard: {
+    maxHeight: '80%',
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    gap: Spacing.three,
+  },
+  lineupPickerHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two },
+  lineupPickerHeading: { flex: 1, gap: Spacing.one },
+  lineupPickerTitle: { fontSize: 20, fontWeight: '700' },
+  lineupPickerHint: { fontSize: 13, lineHeight: 19 },
+  lineupPickerClose: { paddingHorizontal: Spacing.one, paddingVertical: 0 },
+  lineupPickerCloseText: { fontSize: 26, lineHeight: 28 },
+  currentMatchStarter: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    padding: Spacing.two,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 122, 77, 0.28)',
+    backgroundColor: 'rgba(31, 122, 77, 0.08)',
+  },
+  currentMatchStarterBadge: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 19,
+  },
+  currentMatchStarterBadgeText: { color: '#fff', fontWeight: '800' },
+  currentMatchStarterInfo: { flex: 1, gap: 2 },
+  currentMatchStarterName: { fontSize: 14, fontWeight: '700' },
+  currentMatchStarterMeta: { fontSize: 12 },
+  keepMatchStarterButton: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: 999,
+    backgroundColor: '#1f7a4d',
+  },
+  keepMatchStarterText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  matchReserveHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  matchReserveTitle: { fontSize: 14, fontWeight: '700' },
+  matchReserveCount: { minWidth: 24, textAlign: 'center', fontSize: 12, fontWeight: '700' },
+  matchReserveList: { flexGrow: 0, maxHeight: 320 },
+  matchReserveOption: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.one,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: HAIRLINE,
+  },
+  matchReserveBadge: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+  },
+  matchReserveBadgeText: { color: '#fff', fontWeight: '700' },
+  matchReserveInfo: { flex: 1, gap: 3 },
+  matchReserveName: { fontSize: 15, fontWeight: '600' },
+  matchReservePosition: { fontSize: 12 },
+  matchReserveReplaceIcon: { color: '#1f7a4d', fontSize: 20, fontWeight: '700' },
+  matchReserveEmpty: { paddingVertical: Spacing.three, lineHeight: 21 },
+  clearMatchPosition: { alignItems: 'center', paddingVertical: Spacing.two },
+  clearMatchPositionText: { color: '#c0392b', fontWeight: '700' },
 
   field: { gap: Spacing.two, flex: 1 },
   label: { fontSize: 14, fontWeight: '700' },
