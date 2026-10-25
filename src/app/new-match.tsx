@@ -1,7 +1,8 @@
-import { useCallback, useState } from 'react';
+import { createElement, useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -9,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -240,9 +242,8 @@ export default function NewMatchScreen() {
               />
               <View style={styles.fieldRow}>
                 <View style={styles.halfField}>
-                  <Field label="Date" value={date} onChangeText={setDate} placeholder="Sat 12 Oct" />
+                  <CalendarDatePicker value={date} onChange={setDate} />
                 </View>
-               
               </View>
             </FormSection>
 
@@ -527,6 +528,183 @@ type FieldProps = {
   maxLength?: number;
 };
 
+function formatDateKey(selectedDate: Date) {
+  const year = selectedDate.getFullYear();
+  const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+  const day = String(selectedDate.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function startOfToday() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+function dateFromKey(value: string): Date | undefined {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return undefined;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsedDate = new Date(year, month - 1, day);
+  if (
+    parsedDate.getFullYear() !== year ||
+    parsedDate.getMonth() !== month - 1 ||
+    parsedDate.getDate() !== day
+  ) {
+    return undefined;
+  }
+  return parsedDate;
+}
+
+function CalendarDatePicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (date: string) => void;
+}) {
+  const colors = useTheme();
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedDate = dateFromKey(value);
+  const today = startOfToday();
+  const minimumDateKey = formatDateKey(today);
+  const [pendingDate, setPendingDate] = useState(selectedDate ?? today);
+  const safeSelectedDate =
+    selectedDate && formatDateKey(selectedDate) >= minimumDateKey ? selectedDate : undefined;
+  const displayDate = safeSelectedDate?.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  function openDatePicker() {
+    const initialDate =
+      safeSelectedDate && safeSelectedDate >= today ? safeSelectedDate : today;
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: initialDate,
+        mode: 'date',
+        display: 'calendar',
+        minimumDate: today,
+        onChange: (event, pickedDate) => {
+          if (
+            event.type === 'set' &&
+            pickedDate &&
+            formatDateKey(pickedDate) >= formatDateKey(startOfToday())
+          ) {
+            onChange(formatDateKey(pickedDate));
+          }
+        },
+      });
+      return;
+    }
+    setPendingDate(initialDate);
+    setIsOpen(true);
+  }
+
+  return (
+    <View style={styles.field}>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.label}>
+        Date
+      </ThemedText>
+      {Platform.OS === 'web' ? (
+        <View style={styles.webDateInput}>
+          {createElement('input', {
+            type: 'date',
+            value: safeSelectedDate ? formatDateKey(safeSelectedDate) : '',
+            min: minimumDateKey,
+            'aria-label': 'Match date',
+            onChange: (event) => {
+              const selectedKey = event.currentTarget.value;
+              if (selectedKey && selectedKey >= formatDateKey(startOfToday())) {
+                onChange(selectedKey);
+              }
+            },
+            style: {
+              width: '100%',
+              height: 54,
+              boxSizing: 'border-box',
+              padding: '0 12px',
+              border: `1px solid ${HAIRLINE}`,
+              borderRadius: 8,
+              backgroundColor: 'rgba(128, 128, 128, 0.08)',
+              color: colors.text,
+              font: 'inherit',
+            },
+          })}
+        </View>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={displayDate ? `Match date: ${displayDate}` : 'Choose match date'}
+          onPress={openDatePicker}
+          style={({ pressed }) => [
+            styles.input,
+            styles.datePickerTrigger,
+            { borderColor: HAIRLINE, backgroundColor: 'rgba(128, 128, 128, 0.08)' },
+            pressed && styles.pressed,
+          ]}>
+          <ThemedText
+            themeColor={displayDate ? undefined : 'textSecondary'}
+            style={styles.datePickerText}>
+            {displayDate ?? 'Select a date'}
+          </ThemedText>
+          <ThemedText themeColor="textSecondary" style={styles.datePickerIcon}>
+            ▦
+          </ThemedText>
+        </Pressable>
+      )}
+
+      {Platform.OS === 'ios' ? (
+        <Modal
+          visible={isOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsOpen(false)}>
+          <View style={styles.calendarModal}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close date picker"
+              onPress={() => setIsOpen(false)}
+              style={styles.calendarBackdrop}
+            />
+            <View style={[styles.calendarCard, { backgroundColor: colors.background }]}>
+              <ThemedText type="subtitle" style={styles.calendarTitle}>
+                Choose match date
+              </ThemedText>
+              <DateTimePicker
+                value={pendingDate}
+                mode="date"
+                display="inline"
+                minimumDate={today}
+                accentColor="#1f7a4d"
+                onValueChange={(_event, nextDate) => {
+                  if (formatDateKey(nextDate) >= formatDateKey(startOfToday())) {
+                    setPendingDate(nextDate);
+                  }
+                }}
+              />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  onChange(formatDateKey(pendingDate));
+                  setIsOpen(false);
+                }}
+                style={styles.datePickerDone}>
+                <ThemedText style={styles.datePickerDoneText}>Done</ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
+    </View>
+  );
+}
+
 function Field({
   label,
   value,
@@ -688,6 +866,48 @@ const styles = StyleSheet.create({
 
   field: { gap: Spacing.two, flex: 1 },
   label: { fontSize: 14, fontWeight: '700' },
+  datePickerTrigger: {
+    minHeight: 54,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 0,
+  },
+  datePickerText: { flex: 1, fontSize: 16 },
+  datePickerIcon: { fontSize: 18, marginLeft: Spacing.two },
+  webDateInput: {
+    height: 54,
+    overflow: 'hidden',
+    borderRadius: Spacing.two,
+  },
+  calendarModal: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.four,
+  },
+  calendarBackdrop: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+  },
+  calendarCard: {
+    width: '100%',
+    maxWidth: 380,
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    gap: Spacing.two,
+  },
+  calendarTitle: { fontSize: 20 },
+  datePickerDone: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  datePickerDoneText: { color: '#1f7a4d', fontSize: 16, fontWeight: '700' },
   input: {
     minHeight: 54,
     borderWidth: 1,
