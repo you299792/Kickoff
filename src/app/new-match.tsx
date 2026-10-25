@@ -56,7 +56,7 @@ export default function NewMatchScreen() {
   const [selectedTeamId, setSelectedTeamId] = useState('');
   const [selectedOpponentId, setSelectedOpponentId] = useState('');
   const [openTeamDropdown, setOpenTeamDropdown] = useState<'home' | 'opponent' | null>(null);
-  const [currentStep, setCurrentStep] = useState<1 | 2>(1);
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [matchLineups, setMatchLineups] = useState<MatchLineups>({});
   const [openLineupSlot, setOpenLineupSlot] = useState<string | null>(null);
   const [competition, setCompetition] = useState('League');
@@ -209,7 +209,10 @@ export default function NewMatchScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
-                onPress={() => (currentStep === 1 ? router.back() : setCurrentStep(1))}
+                onPress={() => {
+                  if (currentStep === 1) router.back();
+                  else setCurrentStep(currentStep === 3 ? 2 : 1);
+                }}
                 style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
                 <ThemedText themeColor="textSecondary" style={styles.backIcon}>
                   {'<'}
@@ -220,25 +223,33 @@ export default function NewMatchScreen() {
               </Pressable>
 
               <ThemedText type="title" style={styles.title}>
-                {currentStep === 1 ? 'New match' : 'Review lineups'}
+                {currentStep === 1
+                  ? 'New match'
+                  : currentStep === 2
+                    ? 'Review lineups'
+                    : 'Review match'}
               </ThemedText>
               <ThemedText themeColor="textSecondary" style={styles.subtitle}>
                 {currentStep === 1
                   ? 'Set up the fixture before kickoff'
-                  : 'Review or adjust the starting XI for this match.'}
+                  : currentStep === 2
+                    ? 'Review or adjust the starting XI for this match.'
+                    : 'Check all fixture details before you continue.'}
               </ThemedText>
 
               <View style={styles.stepIndicator}>
                 <View style={[styles.stepDot, styles.stepDotActive]} />
                 <View style={styles.stepLine} />
-                <View style={[styles.stepDot, currentStep === 2 && styles.stepDotActive]} />
+                <View style={[styles.stepDot, currentStep >= 2 && styles.stepDotActive]} />
                 <View style={styles.stepLine} />
-                <View style={styles.stepDot} />
+                <View style={[styles.stepDot, currentStep === 3 && styles.stepDotActive]} />
               </View>
               <ThemedText type="small" themeColor="textSecondary" style={styles.stepCaption}>
                 {currentStep === 1
                   ? 'Step 1 of 3 - Fixture setup'
-                  : 'Step 2 of 3 - Starting lineups'}
+                  : currentStep === 2
+                    ? 'Step 2 of 3 - Starting lineups'
+                    : 'Step 3 of 3 - Match review'}
               </ThemedText>
             </View>
 
@@ -413,7 +424,7 @@ export default function NewMatchScreen() {
               <ThemedText style={styles.saveButtonIcon}>-&gt;</ThemedText>
             </Pressable>
               </>
-            ) : selectedTeam && selectedOpponent ? (
+            ) : currentStep === 2 && selectedTeam && selectedOpponent ? (
               <>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.matchOnlyNotice}>
                   Changes here apply to this match only. Your saved team lineups will not be changed.
@@ -428,13 +439,78 @@ export default function NewMatchScreen() {
                 ))}
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => setCurrentStep(1)}
+                  accessibilityLabel="Continue to match review"
+                  onPress={() => setCurrentStep(3)}
                   style={({ pressed }) => [
                     styles.contentNextButton,
                     pressed && styles.buttonPressed,
                   ]}>
-                  <ThemedText style={styles.saveButtonText}>Back to fixture</ThemedText>
+                  <ThemedText style={styles.saveButtonText}>Next</ThemedText>
+                  <ThemedText style={styles.saveButtonIcon}>-&gt;</ThemedText>
                 </Pressable>
+              </>
+            ) : currentStep === 3 && selectedTeam && selectedOpponent ? (
+              <>
+                <ThemedView type="backgroundElement" style={styles.matchReviewCard}>
+                  <View style={styles.matchReviewEyebrowRow}>
+                    <ThemedText style={styles.matchReviewEyebrow}>MATCH FIXTURE</ThemedText>
+                    <View style={styles.matchReviewCompetition}>
+                      <ThemedText style={styles.matchReviewCompetitionText}>
+                        {competition.trim() || 'Friendly'}
+                      </ThemedText>
+                    </View>
+                  </View>
+                  <View style={styles.matchReviewTeams}>
+                    <ReviewTeam team={selectedTeam} />
+                    <ThemedText style={styles.matchReviewVs}>VS</ThemedText>
+                    <ReviewTeam team={selectedOpponent} />
+                  </View>
+                  <View style={styles.matchReviewDetails}>
+                    <ReviewDetail
+                      icon="◷"
+                      label="Date"
+                      value={formatReviewDate(date) ?? 'Not selected'}
+                    />
+                    <ReviewDetail
+                      icon="⌖"
+                      label="Location"
+                      value={location.trim() || 'Not specified'}
+                    />
+                    <ReviewDetail
+                      icon="◴"
+                      label="Duration"
+                      value={`${MATCH_DURATION_MINUTES} minutes · 45-minute halves`}
+                    />
+                    {notes.trim() ? (
+                      <ReviewDetail icon="≡" label="Notes" value={notes.trim()} />
+                    ) : null}
+                  </View>
+                </ThemedView>
+
+                <ThemedText type="small" themeColor="textSecondary" style={styles.reviewFooterNote}>
+                  Review the fixture details before continuing.
+                </ThemedText>
+                <View style={styles.matchReviewActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setCurrentStep(1)}
+                    style={({ pressed }) => [
+                      styles.matchReviewEditButton,
+                      pressed && styles.buttonPressed,
+                    ]}>
+                    <ThemedText style={styles.matchReviewEditText}>Edit fixture</ThemedText>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setCurrentStep(2)}
+                    style={({ pressed }) => [
+                      styles.contentNextButton,
+                      styles.matchReviewLineupAction,
+                      pressed && styles.buttonPressed,
+                    ]}>
+                    <ThemedText style={styles.saveButtonText}>Edit lineups</ThemedText>
+                  </Pressable>
+                </View>
               </>
             ) : null}
           </ScrollView>
@@ -772,7 +848,7 @@ function TeamOption({ team, selected, onPress }: TeamOptionProps) {
 type TeamLineupEditorProps = {
   team: Team;
   lineup: Record<string, string>;
-  onSelectSlot: (slotId: string) => void;
+  onSelectSlot?: (slotId: string) => void;
 };
 
 function TeamLineupEditor({
@@ -813,8 +889,9 @@ function TeamLineupEditor({
                   <View key={slot.id}>
                     <Pressable
                       accessibilityRole="button"
+                      disabled={!onSelectSlot}
                       accessibilityLabel={`${slot.label}: ${selectedPlayer ?? 'Unassigned'}`}
-                      onPress={() => onSelectSlot(slot.id)}
+                      onPress={() => onSelectSlot?.(slot.id)}
                       style={({ pressed }) => [
                         styles.matchPitchPlayer,
                         selectedPlayer && styles.matchPitchPlayerSelected,
@@ -850,6 +927,45 @@ function TeamLineupEditor({
   );
 }
 
+function ReviewTeam({ team }: { team: Team }) {
+  return (
+    <View style={styles.matchReviewTeam}>
+      <View style={[styles.matchReviewBadge, { backgroundColor: team.color }]}>
+        <ThemedText style={styles.teamBadgeText}>
+          {team.name.slice(0, 2).toUpperCase()}
+        </ThemedText>
+      </View>
+      <ThemedText style={styles.matchReviewTeamName} numberOfLines={2}>
+        {team.name}
+      </ThemedText>
+    </View>
+  );
+}
+
+function ReviewDetail({
+  icon,
+  label,
+  value,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.matchReviewDetail}>
+      <View style={styles.matchReviewDetailIcon}>
+        <ThemedText style={styles.matchReviewDetailIconText}>{icon}</ThemedText>
+      </View>
+      <View style={styles.matchReviewDetailText}>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.matchReviewLabel}>
+          {label}
+        </ThemedText>
+        <ThemedText style={styles.matchReviewValue}>{value}</ThemedText>
+      </View>
+    </View>
+  );
+}
+
 type FieldProps = {
   label: string;
   value: string;
@@ -864,6 +980,16 @@ function formatDateKey(selectedDate: Date) {
   const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
   const day = String(selectedDate.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function formatReviewDate(value: string) {
+  const dateValue = dateFromKey(value);
+  return dateValue?.toLocaleDateString(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 function startOfToday() {
@@ -1200,6 +1326,137 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     backgroundColor: 'rgba(31, 122, 77, 0.08)',
     lineHeight: 20,
+  },
+  matchReviewCard: {
+    marginBottom: Spacing.two,
+    padding: Spacing.four,
+    borderRadius: Spacing.four,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: HAIRLINE,
+    gap: Spacing.four,
+  },
+  matchReviewEyebrowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+  },
+  matchReviewEyebrow: {
+    color: '#1f7a4d',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  matchReviewCompetition: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: 999,
+    backgroundColor: 'rgba(31, 122, 77, 0.12)',
+  },
+  matchReviewCompetitionText: {
+    color: '#1f7a4d',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  matchReviewTeams: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  matchReviewTeam: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  matchReviewBadge: {
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 32,
+    borderWidth: 3,
+    borderColor: 'rgba(128, 128, 128, 0.16)',
+  },
+  matchReviewBadgeText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  matchReviewTeamName: {
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  matchReviewVs: {
+    color: '#8f98a3',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  matchReviewDetails: {
+    gap: Spacing.two,
+    paddingTop: Spacing.three,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: HAIRLINE,
+  },
+  matchReviewDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 54,
+    padding: Spacing.two,
+    borderRadius: Spacing.two,
+    backgroundColor: 'rgba(128, 128, 128, 0.06)',
+  },
+  matchReviewDetailIcon: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 17,
+    backgroundColor: 'rgba(31, 122, 77, 0.12)',
+  },
+  matchReviewDetailIconText: {
+    color: '#1f7a4d',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  matchReviewDetailText: {
+    flex: 1,
+    gap: 2,
+  },
+  matchReviewLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  matchReviewValue: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+  },
+  reviewFooterNote: {
+    marginTop: Spacing.one,
+    marginBottom: Spacing.two,
+    textAlign: 'center',
+  },
+  matchReviewActions: {
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+    marginBottom: Spacing.five,
+  },
+  matchReviewEditButton: {
+    minHeight: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: '#1f7a4d',
+  },
+  matchReviewEditText: {
+    color: '#1f7a4d',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  matchReviewLineupAction: {
+    marginTop: 0,
+    marginBottom: 0,
   },
   lineupCard: {
     marginBottom: Spacing.three,
