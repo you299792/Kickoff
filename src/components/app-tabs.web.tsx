@@ -20,7 +20,12 @@ export default function AppTabs() {
   );
 }
 
-function TabButton({ icon, label, isFocused, ...props }: TabTriggerSlotProps & { icon: number; label: string }) {
+function TabButton({
+  icon,
+  label,
+  isFocused,
+  ...props
+}: Omit<TabTriggerSlotProps, 'ref'> & { icon: number; label: string }) {
   return (
     <Pressable
       {...props}

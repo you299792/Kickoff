@@ -1142,7 +1142,7 @@ function CalendarDatePicker({
             value: safeSelectedDate ? formatDateKey(safeSelectedDate) : '',
             min: minimumDateKey,
             'aria-label': 'Match date',
-            onChange: (event) => {
+            onChange: (event: { currentTarget: { value: string } }) => {
               const selectedKey = event.currentTarget.value;
               if (selectedKey && selectedKey >= formatDateKey(startOfToday())) {
                 onChange(selectedKey);
