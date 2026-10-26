@@ -20,6 +20,7 @@ import {
   type MatchFixture,
   type MatchCard,
   type MatchGoal,
+  type MatchPeriod,
   type MatchTeam,
 } from '@/data/matches';
 
@@ -133,6 +134,24 @@ export default function LiveMatchScreen() {
     ? match.elapsedSeconds +
       (match.startedAt ? Math.max(0, now - match.startedAt) / 1000 : 0)
     : 0;
+  const period = match?.period ?? 'regulation';
+  const extraTimeHalfElapsedSeconds =
+    match?.extraTimeHalfStartedAtSeconds === null ||
+    match?.extraTimeHalfStartedAtSeconds === undefined
+      ? 0
+      : Math.max(0, elapsedSeconds - match.extraTimeHalfStartedAtSeconds);
+  const canEndExtraTimeHalf = extraTimeHalfElapsedSeconds >= 15 * 60;
+  const canAddExtraTime =
+    Boolean(match) &&
+    elapsedSeconds >=
+      (45 * 60 +
+        (match?.firstHalfAdditionalMinutes ?? 0) * 60 +
+        45 * 60);
+  const isTied = Boolean(match && match.homeGoals === match.awayGoals);
+  const isMatchEditable =
+    period === 'regulation' ||
+    period === 'extra-time-first' ||
+    period === 'extra-time-second';
   const firstHalfEndSeconds = match
     ? 45 * 60 + match.firstHalfAdditionalMinutes * 60
     : 45 * 60;
@@ -146,12 +165,32 @@ export default function LiveMatchScreen() {
     secondHalfElapsed >= 40 * 60 &&
     secondHalfElapsed < 45 * 60 + (match?.secondHalfAdditionalMinutes ?? 0) * 60;
   const matchClock = match
-    ? getMatchClock(
-        elapsedSeconds,
-        match.firstHalfAdditionalMinutes,
-        match.secondHalfAdditionalMinutes,
-      )
+    ? period === 'extra-time-first' || period === 'extra-time-second'
+      ? formatClock(extraTimeHalfElapsedSeconds)
+      : period === 'extra-time-break'
+        ? formatClock(15 * 60)
+        : period === 'extra-time-full-time'
+          ? formatClock(30 * 60)
+          : getMatchClock(
+              elapsedSeconds,
+              match.firstHalfAdditionalMinutes,
+              match.secondHalfAdditionalMinutes,
+            )
     : '00:00';
+  const matchClockCaption =
+    period === 'extra-time-first'
+      ? 'EXTRA TIME · FIRST HALF'
+      : period === 'extra-time-break'
+        ? 'EXTRA-TIME HALF-TIME'
+        : period === 'extra-time-second'
+          ? 'EXTRA TIME · SECOND HALF'
+          : period === 'extra-time-full-time'
+            ? 'FULL TIME · AFTER EXTRA TIME'
+            : period === 'full-time' || period === 'completed'
+              ? 'FULL TIME'
+              : match?.startedAt
+                ? 'MATCH IN PROGRESS'
+                : 'MATCH CLOCK';
   const selectedPlayers = useMemo(
     () => (selectedScoringTeam ? getTeamPlayers(selectedScoringTeam) : []),
     [selectedScoringTeam],
@@ -173,7 +212,7 @@ export default function LiveMatchScreen() {
   }
 
   function setAdditionalTime(half: 'first' | 'second', minutes: number) {
-    if (!match || busy) return;
+    if (!match || busy || period !== 'regulation') return;
     void persistMatch({
       ...match,
       firstHalfAdditionalMinutes:
@@ -184,7 +223,7 @@ export default function LiveMatchScreen() {
   }
 
   function toggleTimer() {
-    if (!match || busy) return;
+    if (!match || busy || !isMatchEditable || match.status === 'completed') return;
     if (match.startedAt) {
       void persistMatch({
         ...match,
@@ -201,8 +240,82 @@ export default function LiveMatchScreen() {
     }
   }
 
+  async function persistStoppedPeriod(
+    nextPeriod: MatchPeriod,
+    status: MatchFixture['status'],
+  ) {
+    if (!match || busy) return false;
+    return persistMatch({
+      ...match,
+      elapsedSeconds: Math.floor(elapsedSeconds),
+      startedAt: null,
+      status,
+      period: nextPeriod,
+    });
+  }
+
+  async function endMatch() {
+    if (!match || busy || match.status === 'completed') return;
+
+    if (period === 'regulation') {
+      const nextPeriod: MatchPeriod = isTied ? 'full-time' : 'completed';
+      const status = isTied ? 'in-progress' : 'completed';
+      await persistStoppedPeriod(nextPeriod, status);
+      return;
+    }
+
+    if (period === 'extra-time-second' && canEndExtraTimeHalf) {
+      const nextPeriod: MatchPeriod = isTied ? 'extra-time-full-time' : 'completed';
+      const status = isTied ? 'in-progress' : 'completed';
+      await persistStoppedPeriod(nextPeriod, status);
+    }
+  }
+
+  async function endAsDraw() {
+    if (!match || busy || !isTied || period !== 'full-time') return;
+    await persistStoppedPeriod('completed', 'completed');
+  }
+
+  async function startExtraTime() {
+    if (!match || busy || !isTied || period !== 'full-time' || !canAddExtraTime) return;
+    const halfStartedAt = Math.floor(elapsedSeconds);
+    await persistMatch({
+      ...match,
+      elapsedSeconds: halfStartedAt,
+      startedAt: getCurrentTimestamp(),
+      status: 'in-progress',
+      period: 'extra-time-first',
+      extraTimeHalfStartedAtSeconds: halfStartedAt,
+    });
+  }
+
+  async function endExtraTimeFirstHalf() {
+    if (
+      !match ||
+      busy ||
+      period !== 'extra-time-first' ||
+      !canEndExtraTimeHalf
+    ) {
+      return;
+    }
+    await persistStoppedPeriod('extra-time-break', 'in-progress');
+  }
+
+  async function startExtraTimeSecondHalf() {
+    if (!match || busy || period !== 'extra-time-break') return;
+    const halfStartedAt = Math.floor(elapsedSeconds);
+    await persistMatch({
+      ...match,
+      elapsedSeconds: halfStartedAt,
+      startedAt: getCurrentTimestamp(),
+      status: 'in-progress',
+      period: 'extra-time-second',
+      extraTimeHalfStartedAtSeconds: halfStartedAt,
+    });
+  }
+
   function recordGoal(playerName: string) {
-    if (!match || !selectedScoringTeam || busy) return;
+    if (!match || !selectedScoringTeam || busy || !isMatchEditable) return;
     const goal: MatchGoal = {
       id: createMatchId(),
       teamId: selectedScoringTeam.id,
@@ -225,7 +338,7 @@ export default function LiveMatchScreen() {
   }
 
   function undoLastGoal() {
-    if (!match || busy || match.goals.length === 0) return;
+    if (!match || busy || !isMatchEditable || match.goals.length === 0) return;
     const [lastGoal, ...remainingGoals] = [...match.goals].reverse();
     void persistMatch({
       ...match,
@@ -236,7 +349,7 @@ export default function LiveMatchScreen() {
   }
 
   function recordCard(type: MatchCard['type']) {
-    if (!match || !selectedCardTeam || !selectedCardPlayer || busy) return;
+    if (!match || !selectedCardTeam || !selectedCardPlayer || busy || !isMatchEditable) return;
     const card: MatchCard = {
       id: createMatchId(),
       teamId: selectedCardTeam.id,
@@ -254,7 +367,7 @@ export default function LiveMatchScreen() {
   }
 
   function undoLastCard() {
-    if (!match || busy || match.cards.length === 0) return;
+    if (!match || busy || !isMatchEditable || match.cards.length === 0) return;
     void persistMatch({ ...match, cards: match.cards.slice(0, -1) });
   }
 
@@ -279,13 +392,23 @@ export default function LiveMatchScreen() {
               <ThemedText themeColor="textSecondary" style={styles.backText}>‹</ThemedText>
               <ThemedText themeColor="textSecondary">Home</ThemedText>
             </Pressable>
-            <View style={[styles.statusPill, Boolean(match?.startedAt) && styles.statusPillLive]}>
+            <View
+              style={[
+                styles.statusPill,
+                Boolean(match?.startedAt) && styles.statusPillLive,
+              ]}>
               <View
                 style={[styles.statusDot, Boolean(match?.startedAt) && styles.statusDotLive]}
               />
               <ThemedText
                 style={[styles.statusText, Boolean(match?.startedAt) && styles.statusTextLive]}>
-                {match?.startedAt ? 'LIVE' : 'MATCH DAY'}
+                {period === 'completed'
+                  ? 'FULL TIME'
+                  : match?.startedAt
+                    ? 'LIVE'
+                    : period === 'full-time' || period === 'extra-time-full-time'
+                      ? 'FULL TIME'
+                      : 'MATCH DAY'}
               </ThemedText>
             </View>
           </View>
@@ -324,7 +447,7 @@ export default function LiveMatchScreen() {
                     </View>
                     <ThemedText style={styles.timerValue}>{matchClock}</ThemedText>
                     <ThemedText themeColor="textSecondary" style={styles.clockCaption}>
-                      {match.startedAt ? 'MATCH IN PROGRESS' : 'MATCH CLOCK'}
+                      {matchClockCaption}
                     </ThemedText>
                   </View>
                   <View style={styles.teamColumn}>
@@ -341,14 +464,19 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={toggleTimer}
-                    disabled={busy}
+                    disabled={busy || !isMatchEditable || match.status === 'completed'}
                     style={({ pressed }) => [
                       styles.timerButton,
                       pressed && styles.pressed,
-                      busy && styles.disabled,
+                      (busy || !isMatchEditable || match.status === 'completed') &&
+                        styles.disabled,
                     ]}>
                     <ThemedText style={styles.timerButtonText}>
-                      {match.startedAt ? 'Ⅱ  Pause clock' : match.elapsedSeconds ? '▶  Resume clock' : '▶  Start clock'}
+                      {match.startedAt
+                        ? 'Ⅱ  Pause clock'
+                        : match.elapsedSeconds
+                          ? '▶  Resume clock'
+                          : '▶  Start clock'}
                     </ThemedText>
                   </Pressable>
                   <Pressable
@@ -358,11 +486,12 @@ export default function LiveMatchScreen() {
                       setSelectedScoringTeam(null);
                       setGoalModalVisible(true);
                     }}
-                    disabled={busy}
+                    disabled={busy || !isMatchEditable || match.status === 'completed'}
                     style={({ pressed }) => [
                       styles.goalButton,
                       pressed && styles.pressed,
-                      busy && styles.disabled,
+                      (busy || !isMatchEditable || match.status === 'completed') &&
+                        styles.disabled,
                     ]}>
                     <ThemedText style={styles.goalButtonText}>＋  Log a goal</ThemedText>
                   </Pressable>
@@ -375,17 +504,160 @@ export default function LiveMatchScreen() {
                     setSelectedCardPlayer(null);
                     setCardModalVisible(true);
                   }}
-                  disabled={busy}
+                  disabled={busy || !isMatchEditable || match.status === 'completed'}
                   style={({ pressed }) => [
                     styles.cardButton,
                     pressed && styles.pressed,
-                    busy && styles.disabled,
+                    (busy || !isMatchEditable || match.status === 'completed') &&
+                      styles.disabled,
                   ]}>
                   <ThemedText style={styles.cardButtonText}>▰  Record a card</ThemedText>
                 </Pressable>
+
+                {period === 'regulation' ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={endMatch}
+                    disabled={busy || match.status === 'completed'}
+                    style={({ pressed }) => [
+                      styles.periodActionButton,
+                      styles.periodActionSecondary,
+                      pressed && styles.pressed,
+                      (busy || match.status === 'completed') && styles.disabled,
+                    ]}>
+                    <ThemedText style={styles.periodActionSecondaryText}>
+                      End match and go to full time
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
+                {period === 'extra-time-first' && canEndExtraTimeHalf ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={endExtraTimeFirstHalf}
+                    disabled={busy}
+                    style={({ pressed }) => [
+                      styles.periodActionButton,
+                      styles.periodActionSecondary,
+                      pressed && styles.pressed,
+                      busy && styles.disabled,
+                    ]}>
+                    <ThemedText style={styles.periodActionSecondaryText}>
+                      End first extra-time half
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
+                {period === 'extra-time-break' ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={startExtraTimeSecondHalf}
+                    disabled={busy}
+                    style={({ pressed }) => [
+                      styles.periodActionButton,
+                      styles.periodActionPrimary,
+                      pressed && styles.pressed,
+                      busy && styles.disabled,
+                    ]}>
+                    <ThemedText style={styles.periodActionPrimaryText}>
+                      Start second 15-minute half
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
+                {period === 'extra-time-second' && canEndExtraTimeHalf ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={endMatch}
+                    disabled={busy}
+                    style={({ pressed }) => [
+                      styles.periodActionButton,
+                      styles.periodActionSecondary,
+                      pressed && styles.pressed,
+                      busy && styles.disabled,
+                    ]}>
+                    <ThemedText style={styles.periodActionSecondaryText}>
+                      End match
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
               </ThemedView>
 
               {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
+
+              {period === 'full-time' ? (
+                <ThemedView type="backgroundElement" style={styles.periodCard}>
+                  <ThemedText style={styles.periodCardTitle}>Full time · Match drawn</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {canAddExtraTime
+                      ? 'End the match as a draw or play 30 minutes of extra time in two 15-minute halves.'
+                      : 'You can end the match as a draw. Extra time becomes available after 90 minutes.'}
+                  </ThemedText>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={endAsDraw}
+                    disabled={busy}
+                    style={({ pressed }) => [
+                      styles.periodActionButton,
+                      styles.periodActionSecondary,
+                      pressed && styles.pressed,
+                      busy && styles.disabled,
+                    ]}>
+                    <ThemedText style={styles.periodActionSecondaryText}>
+                      End match as a draw
+                    </ThemedText>
+                  </Pressable>
+                  {canAddExtraTime ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={startExtraTime}
+                      disabled={busy}
+                      style={({ pressed }) => [
+                        styles.periodActionButton,
+                        styles.periodActionPrimary,
+                        pressed && styles.pressed,
+                        busy && styles.disabled,
+                      ]}>
+                      <ThemedText style={styles.periodActionPrimaryText}>
+                        Add 30 minutes of extra time
+                      </ThemedText>
+                    </Pressable>
+                  ) : null}
+                </ThemedView>
+              ) : null}
+
+              {period === 'extra-time-break' ? (
+                <ThemedView type="backgroundElement" style={styles.periodCard}>
+                  <ThemedText style={styles.periodCardTitle}>Extra-time half-time</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    The first 15-minute half is complete. Start the second half when ready.
+                  </ThemedText>
+                </ThemedView>
+              ) : null}
+
+              {period === 'extra-time-full-time' ? (
+                <ThemedView type="backgroundElement" style={styles.periodCard}>
+                  <ThemedText style={styles.periodCardTitle}>
+                    Extra time complete · Match drawn
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    The next step is a penalty shootout.
+                  </ThemedText>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: true }}
+                    disabled
+                    style={[
+                      styles.periodActionButton,
+                      styles.periodActionDisabled,
+                      styles.disabled,
+                    ]}>
+                    <ThemedText style={styles.periodActionDisabledText}>
+                      Proceed to penalty shootout
+                    </ThemedText>
+                  </Pressable>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Penalty shootouts are not available yet.
+                  </ThemedText>
+                </ThemedView>
+              ) : null}
 
               {firstHalfAdditionalTimeVisible ? (
                 <ThemedView type="backgroundElement" style={styles.additionalTimeCard}>
@@ -500,8 +772,12 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={undoLastGoal}
-                    disabled={busy}
-                    style={({ pressed }) => [styles.undoButton, pressed && styles.pressed]}>
+                    disabled={busy || !isMatchEditable}
+                    style={({ pressed }) => [
+                      styles.undoButton,
+                      pressed && styles.pressed,
+                      (!isMatchEditable || busy) && styles.disabled,
+                    ]}>
                     <ThemedText style={styles.undoText}>Undo last</ThemedText>
                   </Pressable>
                 ) : null}
@@ -557,8 +833,12 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={undoLastCard}
-                    disabled={busy}
-                    style={({ pressed }) => [styles.undoButton, pressed && styles.pressed]}>
+                    disabled={busy || !isMatchEditable}
+                    style={({ pressed }) => [
+                      styles.undoButton,
+                      pressed && styles.pressed,
+                      (!isMatchEditable || busy) && styles.disabled,
+                    ]}>
                     <ThemedText style={styles.undoText}>Undo last</ThemedText>
                   </Pressable>
                 ) : null}
@@ -1072,6 +1352,34 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(128, 128, 128, 0.08)',
   },
   cardButtonText: { fontSize: 13, fontWeight: '700' },
+  periodActionButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Spacing.two,
+  },
+  periodActionPrimary: { backgroundColor: '#1f7a4d' },
+  periodActionSecondary: {
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+  },
+  periodActionDisabled: {
+    backgroundColor: 'rgba(128, 128, 128, 0.12)',
+  },
+  periodActionPrimaryText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  periodActionSecondaryText: { fontSize: 14, fontWeight: '700' },
+  periodActionDisabledText: { color: '#8f98a3', fontSize: 14, fontWeight: '700' },
+  periodCard: {
+    gap: Spacing.two,
+    marginTop: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: HAIRLINE,
+  },
+  periodCardTitle: { fontSize: 16, fontWeight: '800' },
   additionalTimeCard: {
     marginTop: Spacing.three,
     padding: Spacing.three,

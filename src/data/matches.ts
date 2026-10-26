@@ -23,6 +23,15 @@ export type MatchCard = {
   elapsedSeconds: number;
 };
 
+export type MatchPeriod =
+  | 'regulation'
+  | 'extra-time-first'
+  | 'extra-time-break'
+  | 'extra-time-second'
+  | 'full-time'
+  | 'extra-time-full-time'
+  | 'completed';
+
 export type MatchFixture = {
   id: string;
   homeTeam: MatchTeam;
@@ -41,6 +50,8 @@ export type MatchFixture = {
   cards: MatchCard[];
   firstHalfAdditionalMinutes: number;
   secondHalfAdditionalMinutes: number;
+  period?: MatchPeriod;
+  extraTimeHalfStartedAtSeconds?: number | null;
 };
 
 const MATCHES_STORAGE_KEY = '@kickoff/matches';
@@ -99,6 +110,18 @@ function isMatchCard(value: unknown): value is MatchCard {
   );
 }
 
+function isMatchPeriod(value: unknown): value is MatchPeriod {
+  return [
+    'regulation',
+    'extra-time-first',
+    'extra-time-break',
+    'extra-time-second',
+    'full-time',
+    'extra-time-full-time',
+    'completed',
+  ].includes(String(value));
+}
+
 function isMatchFixture(value: unknown): value is MatchFixture {
   if (typeof value !== 'object' || value === null) return false;
   const match = value as Record<string, unknown>;
@@ -125,7 +148,12 @@ function isMatchFixture(value: unknown): value is MatchFixture {
         match.firstHalfAdditionalMinutes >= 0)) &&
     (match.secondHalfAdditionalMinutes === undefined ||
       (typeof match.secondHalfAdditionalMinutes === 'number' &&
-        match.secondHalfAdditionalMinutes >= 0))
+        match.secondHalfAdditionalMinutes >= 0)) &&
+    (match.period === undefined || isMatchPeriod(match.period)) &&
+    (match.extraTimeHalfStartedAtSeconds === undefined ||
+      match.extraTimeHalfStartedAtSeconds === null ||
+      (typeof match.extraTimeHalfStartedAtSeconds === 'number' &&
+        match.extraTimeHalfStartedAtSeconds >= 0))
   );
 }
 
@@ -143,6 +171,8 @@ export async function getMatchFixtures(): Promise<MatchFixture[]> {
     cards: match.cards ?? [],
     firstHalfAdditionalMinutes: match.firstHalfAdditionalMinutes ?? 0,
     secondHalfAdditionalMinutes: match.secondHalfAdditionalMinutes ?? 0,
+    period: match.period ?? (match.status === 'completed' ? 'completed' : 'regulation'),
+    extraTimeHalfStartedAtSeconds: match.extraTimeHalfStartedAtSeconds ?? null,
   }));
 }
 

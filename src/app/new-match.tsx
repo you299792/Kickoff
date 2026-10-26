@@ -232,6 +232,8 @@ export default function NewMatchScreen() {
       cards: [],
       firstHalfAdditionalMinutes: 0,
       secondHalfAdditionalMinutes: 0,
+      period: 'regulation',
+      extraTimeHalfStartedAtSeconds: null,
     };
 
     try {
