@@ -1,46 +1,50 @@
-# Kickoff - Football Match Manager
+# Kickoff
 
-A lightweight app for running a football match, such as a Sunday pickup game, from your phone.
+Kickoff is a football team and match management app built with Expo, React Native, and TypeScript. Create squads, set up fixtures, track a match live, and review completed matches from the home screen.
 
-The app uses browser Local Storage instead of a cloud database, so it requires zero setup and keeps your match data on your device. Scores, player details, lineup positions, match time, and substitutions remain available after refreshing or reopening the app in the same browser.
+## Features
 
-## Core Features
+### Team management
 
-### 1. Interactive Scoreboard
+- Create and edit teams, choose a team color, and add players with their positions.
+- Assign players to lineup positions on a football pitch.
+- View saved squads and player rosters in the Teams tab.
 
-- **Manual counters:** Use large, tap-friendly `+` and `-` buttons to track goals and fouls for Team A and Team B.
-- **Match clock:** Start and pause a timer for standard 45-minute halves or shorter custom pickup games.
-- **Period tracker:** Switch between `First Half`, `Second Half`, and `Full Time`.
+### Match setup
 
-### 2. Drag-and-Drop Lineup Board
+- Choose two different saved teams and customize the match lineup for each side.
+- Set the competition, location, date, and optional match notes.
+- Save a fixture for later or start it immediately.
 
-- **Pitch visualizer:** Arrange players on a green football pitch.
-- **Formation toggles:** Quickly shift player slots into classic formations such as `4-3-3`, `4-4-2`, and `3-5-2`.
-- **Squad list:** Enter your friends' names and drag them onto their positions on the pitch.
+### Live match tracking
 
-### 3. Live Substitution and Minutes Tracker
+- Start, pause, and resume the match clock.
+- Record goals and scorers, and record yellow or red cards.
+- Set first- and second-half added time.
+- End a level match at full time, or play extra time when available.
+- Play extra time as two 15-minute halves.
+- If the match is still level after extra time, record a penalty shootout. Choose which team kicks first, select a taker when squad players are available, and record each kick as scored or missed/saved. The shootout uses up to five kicks per team, ends early when the other side cannot catch up, and continues to sudden death if level.
+- Penalty kicks are tracked separately and do not change the regular match score or goal timeline.
+- Completed matches are saved and return to the home screen.
 
-- **Roster toggles:** Mark each player as `On Field` or `Benched`.
-- **Active time clock:** A local TypeScript timer tracks a player's time while they are on the pitch and pauses when they move to the bench.
-- **Accurate totals:** See the exact number of minutes played by every player.
+### Match history and details
 
-## How Data Is Stored
+- View completed results on the home screen, with team win/loss/draw labels and penalty results when applicable.
+- Filter the match history by wins, draws, and losses.
+- Tap a completed match to see its score, goals, cards, penalty kicks, venue, and notes.
+- Long-press an upcoming or completed match card to open its actions.
 
-The app does not send match statistics to a remote server. Instead, it serializes the current match state and saves it directly in the browser with `localStorage`:
+### Recently deleted
 
-```typescript
-localStorage.setItem('matchState', JSON.stringify(currentMatchData));
-```
+- Move a match to Recently deleted from its long-press actions.
+- Restore a deleted match within 30 days or permanently delete it from the Recently deleted screen.
+- Matches past the 30-day restore period are removed when deleted matches are loaded.
 
-Whenever a goal is scored, a player is moved, or a substitution is made, the saved state can be updated. If the browser is refreshed or closed during a match, reopening the app restores the saved match time, roster, lineup, and score.
+## Data storage
 
-Because the data is stored locally, it is not synchronized across devices and may be lost if the browser's site data is cleared.
+Kickoff stores teams and matches on the device using AsyncStorage. It does not currently sync data to an account or remote database, so data is not shared across devices and can be lost if the app's local storage is cleared.
 
-## Mobile-First Layout
-
-The dashboard is designed for easy-to-tap controls while managing a match from the sidelines.
-
-## Getting Started
+## Getting started
 
 Install dependencies:
 
@@ -54,5 +58,18 @@ Start the Expo development server:
 npx expo start
 ```
 
-Then open the app in a browser, Android emulator, iOS simulator, or Expo Go.
+Use the Expo CLI prompts to open the app in a platform supported by your development environment, such as a browser, Android emulator, iOS simulator, or Expo Go.
 
+## Development checks
+
+Run the project linter:
+
+```bash
+npm run lint
+```
+
+Run the TypeScript compiler without emitting files:
+
+```bash
+npx tsc --noEmit
+```
