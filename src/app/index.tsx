@@ -17,6 +17,8 @@ type Match = {
   venue: string;
   homeTeam: string;
   awayTeam: string;
+  homeColor: string;
+  awayColor: string;
   homeGoals: number;
   awayGoals: number;
   scorers: string[];
@@ -39,8 +41,6 @@ const RESULT_STYLES: Record<Result, { background: string; text: string; label: s
   D: { background: 'rgba(180, 130, 26, 0.18)', text: '#b4821a', label: 'Draw' },
   L: { background: 'rgba(192, 57, 43, 0.16)', text: '#c0392b', label: 'Loss' },
 };
-
-const BADGE_COLORS = ['#1f7a4d', '#2f6fb5', '#8e44ad', '#c0392b', '#d97706', '#0f766e'];
 
 const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
 
@@ -67,14 +67,6 @@ function teamInitials(name: string) {
     .slice(0, 2)
     .map((word) => word[0].toUpperCase())
     .join('');
-}
-
-function teamColor(name: string) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i += 1) {
-    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  }
-  return BADGE_COLORS[hash % BADGE_COLORS.length];
 }
 
 export default function HomeScreen() {
@@ -139,6 +131,8 @@ export default function HomeScreen() {
             venue: match.venue,
             homeTeam: match.homeTeam.name,
             awayTeam: match.awayTeam.name,
+            homeColor: match.homeTeam.color,
+            awayColor: match.awayTeam.color,
             homeGoals: match.homeGoals,
             awayGoals: match.awayGoals,
             scorers: match.goals.map((goal) => goal.playerName),
@@ -324,96 +318,126 @@ export default function HomeScreen() {
               const resultStyle = RESULT_STYLES[result];
               const homeWon = result === 'W';
               const awayWon = result === 'L';
+              const homeOutcome = result === 'D' ? 'DRAW' : homeWon ? 'WIN' : 'LOSS';
+              const awayOutcome = result === 'D' ? 'DRAW' : awayWon ? 'WIN' : 'LOSS';
 
               return (
-                <ThemedView
+                <Pressable
                   key={match.id}
-                  type="backgroundElement"
-                  style={styles.matchCard}
-                  accessibilityLabel={`${match.homeTeam} ${match.homeGoals}, ${match.awayTeam} ${match.awayGoals}`}>
-                  <View style={styles.cardTopRow}>
-                    <View style={styles.cardMeta}>
-                      <View
-                        style={[styles.resultPill, { backgroundColor: resultStyle.background }]}>
-                        <ThemedText style={[styles.resultPillText, { color: resultStyle.text }]}>
-                          {resultStyle.label}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View details: ${match.homeTeam} ${match.homeGoals}, ${match.awayTeam} ${match.awayGoals}`}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/match-details',
+                      params: { matchId: match.id },
+                    })
+                  }
+                  style={({ pressed }) => [pressed && styles.cardPressed]}>
+                  <ThemedView type="backgroundElement" style={styles.matchCard}>
+                    <View style={styles.cardTopRow}>
+                      <View style={styles.cardMeta}>
+                        <View
+                          style={[styles.resultPill, { backgroundColor: resultStyle.background }]}>
+                          <ThemedText style={[styles.resultPillText, { color: resultStyle.text }]}>
+                            {resultStyle.label}
+                          </ThemedText>
+                        </View>
+                        <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+                          {match.competition} · {match.date}
                         </ThemedText>
                       </View>
-                      <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-                        {match.competition} · {match.date}
-                      </ThemedText>
                     </View>
-                  </View>
 
-                  <View style={styles.scoreboard}>
-                    <View style={styles.teamRow}>
-                      <View
-                        style={[styles.teamBadge, { backgroundColor: teamColor(match.homeTeam) }]}>
-                        <ThemedText style={styles.teamBadgeText}>
-                          {teamInitials(match.homeTeam)}
+                    <View style={styles.scoreboard}>
+                      <View style={styles.teamRow}>
+                        <View
+                          style={[styles.teamBadge, { backgroundColor: match.homeColor }]}>
+                          <ThemedText style={styles.teamBadgeText}>
+                            {teamInitials(match.homeTeam)}
+                          </ThemedText>
+                        </View>
+                        <View style={styles.teamInfo}>
+                          <ThemedText style={styles.teamName} numberOfLines={1}>
+                            {match.homeTeam}
+                          </ThemedText>
+                          <ThemedText
+                            style={[
+                              styles.teamOutcome,
+                              homeWon ? styles.teamOutcomeWin : null,
+                              result === 'D' ? styles.teamOutcomeDraw : null,
+                            ]}>
+                            {homeOutcome}
+                          </ThemedText>
+                        </View>
+                        <ThemedText style={[styles.scoreValue, !homeWon && styles.scoreDimmed]}>
+                          {match.homeGoals}
                         </ThemedText>
                       </View>
-                      <ThemedText style={styles.teamName} numberOfLines={1}>
-                        {match.homeTeam}
-                      </ThemedText>
-                      <ThemedText style={[styles.scoreValue, !homeWon && styles.scoreDimmed]}>
-                        {match.homeGoals}
-                      </ThemedText>
-                    </View>
-
-                    <View style={styles.teamRow}>
-                      <View
-                        style={[styles.teamBadge, { backgroundColor: teamColor(match.awayTeam) }]}>
-                        <ThemedText style={styles.teamBadgeText}>
-                          {teamInitials(match.awayTeam)}
+                      <View style={styles.teamRow}>
+                        <View
+                          style={[styles.teamBadge, { backgroundColor: match.awayColor }]}>
+                          <ThemedText style={styles.teamBadgeText}>
+                            {teamInitials(match.awayTeam)}
+                          </ThemedText>
+                        </View>
+                        <View style={styles.teamInfo}>
+                          <ThemedText style={styles.teamName} numberOfLines={1}>
+                            {match.awayTeam}
+                          </ThemedText>
+                          <ThemedText
+                            style={[
+                              styles.teamOutcome,
+                              awayWon ? styles.teamOutcomeWin : null,
+                              result === 'D' ? styles.teamOutcomeDraw : null,
+                            ]}>
+                            {awayOutcome}
+                          </ThemedText>
+                        </View>
+                        <ThemedText style={[styles.scoreValue, !awayWon && styles.scoreDimmed]}>
+                          {match.awayGoals}
                         </ThemedText>
                       </View>
-                      <ThemedText style={styles.teamName} numberOfLines={1}>
-                        {match.awayTeam}
-                      </ThemedText>
-                      <ThemedText style={[styles.scoreValue, !awayWon && styles.scoreDimmed]}>
-                        {match.awayGoals}
-                      </ThemedText>
                     </View>
-                  </View>
 
-                  <View style={styles.divider} />
+                    <View style={styles.divider} />
 
-                  <View style={styles.cardFooter}>
-                    <View style={styles.footerLine}>
-                      <ThemedText type="small">⚽</ThemedText>
-                      <ThemedText
-                        type="small"
-                        themeColor="textSecondary"
-                        style={styles.footerText}
-                        numberOfLines={2}>
-                        {match.scorers.join(' · ')}
-                      </ThemedText>
-                    </View>
-                    <View style={styles.footerLine}>
-                      <ThemedText type="small">📍</ThemedText>
-                      <ThemedText
-                        type="small"
-                        themeColor="textSecondary"
-                        style={styles.footerText}
-                        numberOfLines={1}>
-                        {match.venue}
-                      </ThemedText>
-                    </View>
-                    {match.penaltyScore ? (
+                    <View style={styles.cardFooter}>
                       <View style={styles.footerLine}>
                         <ThemedText type="small">⚽</ThemedText>
                         <ThemedText
                           type="small"
                           themeColor="textSecondary"
                           style={styles.footerText}
-                          numberOfLines={1}>
-                          Won on penalties · {match.penaltyScore}
+                          numberOfLines={2}>
+                          {match.scorers.join(' · ')}
                         </ThemedText>
                       </View>
-                    ) : null}
-                  </View>
-                </ThemedView>
+                      <View style={styles.footerLine}>
+                        <ThemedText type="small">📍</ThemedText>
+                        <ThemedText
+                          type="small"
+                          themeColor="textSecondary"
+                          style={styles.footerText}
+                          numberOfLines={1}>
+                          {match.venue}
+                        </ThemedText>
+                      </View>
+                      {match.penaltyScore ? (
+                        <View style={styles.footerLine}>
+                          <ThemedText type="small">⚽</ThemedText>
+                          <ThemedText
+                            type="small"
+                            themeColor="textSecondary"
+                            style={styles.footerText}
+                            numberOfLines={1}>
+                            Won on penalties · {match.penaltyScore}
+                          </ThemedText>
+                        </View>
+                      ) : null}
+                      <ThemedText style={styles.viewDetailsText}>View match details ›</ThemedText>
+                    </View>
+                  </ThemedView>
+                </Pressable>
               );
             })}
 
@@ -614,6 +638,7 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     gap: Spacing.two,
   },
+  cardPressed: { opacity: 0.75 },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -658,9 +683,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   teamName: {
-    flex: 1,
     fontWeight: '600',
   },
+  teamInfo: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  teamOutcome: {
+    color: '#c0392b',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+  },
+  teamOutcomeWin: { color: '#1f7a4d' },
+  teamOutcomeDraw: { color: '#b4821a' },
   scoreValue: {
     minWidth: 24,
     textAlign: 'right',
@@ -686,6 +723,12 @@ const styles = StyleSheet.create({
   },
   footerText: {
     flexShrink: 1,
+  },
+  viewDetailsText: {
+    alignSelf: 'flex-end',
+    color: '#1f7a4d',
+    fontSize: 12,
+    fontWeight: '700',
   },
   emptyState: {
     padding: Spacing.four,
