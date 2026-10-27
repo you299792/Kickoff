@@ -7,8 +7,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import {
-  deleteMatchFixture,
   getMatchFixtures,
+  softDeleteMatchFixture,
   type MatchFixture,
 } from '@/data/matches';
 
@@ -198,7 +198,7 @@ export default function HomeScreen() {
     setDeletingMatchId(matchId);
     setFixturesError('');
     try {
-      await deleteMatchFixture(matchId);
+      await softDeleteMatchFixture(matchId);
       setSavedMatches((matches) => matches.filter((match) => match.id !== matchId));
     } catch (deleteError) {
       setFixturesError(
@@ -212,12 +212,12 @@ export default function HomeScreen() {
   function confirmDeleteMatch(match: MatchFixture) {
     setMatchActionsTarget(null);
     Alert.alert(
-      'Delete match?',
-      `${match.homeTeam.name} vs ${match.awayTeam.name} and its saved details will be permanently deleted.`,
+      'Are you sure you want to delete this match?',
+      `${match.homeTeam.name} vs ${match.awayTeam.name} can be restored for 30 days before it is permanently deleted.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Delete Match',
           style: 'destructive',
           onPress: () => void deleteMatch(match.id),
         },
@@ -253,6 +253,17 @@ export default function HomeScreen() {
               ))}
             </View>
           </ThemedView>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/deleted-matches')}
+            style={({ pressed }) => [
+              styles.deletedMatchesButton,
+              pressed && styles.chipPressed,
+            ]}>
+            <ThemedText style={styles.deletedMatchesButtonText}>Recently deleted</ThemedText>
+            <ThemedText themeColor="textSecondary">›</ThemedText>
+          </Pressable>
 
           {upcomingMatches.length > 0 || fixturesError ? (
             <View style={styles.upcomingSection}>
@@ -567,7 +578,9 @@ export default function HomeScreen() {
                     pressed && styles.chipPressed,
                     deletingMatchId !== null && styles.disabled,
                   ]}>
-                  <ThemedText style={styles.overlayDeleteText}>Delete match</ThemedText>
+                  <ThemedText style={styles.overlayDeleteText}>
+                    Delete Match
+                  </ThemedText>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -620,6 +633,18 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     marginBottom: Spacing.four,
   },
+  deletedMatchesButton: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.four,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Spacing.three,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: HAIRLINE,
+  },
+  deletedMatchesButtonText: { color: '#c0392b', fontSize: 14, fontWeight: '700' },
   upcomingSection: {
     marginBottom: Spacing.four,
   },

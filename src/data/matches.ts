@@ -69,7 +69,14 @@ export type MatchFixture = {
   penaltyShootout?: MatchPenaltyShootout;
 };
 
+export type DeletedMatchFixture = {
+  match: MatchFixture;
+  deletedAt: number;
+};
+
 const MATCHES_STORAGE_KEY = '@kickoff/matches';
+const DELETED_MATCHES_STORAGE_KEY = '@kickoff/deleted-matches';
+export const DELETED_MATCH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export function createMatchId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -205,6 +212,29 @@ function isMatchFixture(value: unknown): value is MatchFixture {
   );
 }
 
+function isDeletedMatchFixture(value: unknown): value is DeletedMatchFixture {
+  if (typeof value !== 'object' || value === null) return false;
+  const deletedMatch = value as Record<string, unknown>;
+  return (
+    typeof deletedMatch.deletedAt === 'number' &&
+    Number.isFinite(deletedMatch.deletedAt) &&
+    deletedMatch.deletedAt >= 0 &&
+    isMatchFixture(deletedMatch.match)
+  );
+}
+
+function normalizeMatchFixture(match: MatchFixture): MatchFixture {
+  return {
+    ...match,
+    goals: match.goals ?? [],
+    cards: match.cards ?? [],
+    firstHalfAdditionalMinutes: match.firstHalfAdditionalMinutes ?? 0,
+    secondHalfAdditionalMinutes: match.secondHalfAdditionalMinutes ?? 0,
+    period: match.period ?? (match.status === 'completed' ? 'completed' : 'regulation'),
+    extraTimeHalfStartedAtSeconds: match.extraTimeHalfStartedAtSeconds ?? null,
+  };
+}
+
 export async function getMatchFixtures(): Promise<MatchFixture[]> {
   const serializedMatches = await AsyncStorage.getItem(MATCHES_STORAGE_KEY);
   if (serializedMatches === null) return [];
@@ -213,15 +243,35 @@ export async function getMatchFixtures(): Promise<MatchFixture[]> {
   if (!Array.isArray(savedMatches) || !savedMatches.every(isMatchFixture)) {
     throw new Error('Saved match data is invalid. Clear the app storage and try again.');
   }
-  return savedMatches.map((match) => ({
-    ...match,
-    goals: match.goals ?? [],
-    cards: match.cards ?? [],
-    firstHalfAdditionalMinutes: match.firstHalfAdditionalMinutes ?? 0,
-    secondHalfAdditionalMinutes: match.secondHalfAdditionalMinutes ?? 0,
-    period: match.period ?? (match.status === 'completed' ? 'completed' : 'regulation'),
-    extraTimeHalfStartedAtSeconds: match.extraTimeHalfStartedAtSeconds ?? null,
+  return savedMatches.map(normalizeMatchFixture);
+}
+
+async function readDeletedMatchFixtures(): Promise<DeletedMatchFixture[]> {
+  const serializedMatches = await AsyncStorage.getItem(DELETED_MATCHES_STORAGE_KEY);
+  if (serializedMatches === null) return [];
+
+  const deletedMatches: unknown = JSON.parse(serializedMatches);
+  if (!Array.isArray(deletedMatches) || !deletedMatches.every(isDeletedMatchFixture)) {
+    throw new Error('Deleted match data is invalid. Clear the app storage and try again.');
+  }
+  return deletedMatches.map((deletedMatch) => ({
+    ...deletedMatch,
+    match: normalizeMatchFixture(deletedMatch.match),
   }));
+}
+
+export async function getDeletedMatchFixtures(): Promise<DeletedMatchFixture[]> {
+  const deletedMatches = await readDeletedMatchFixtures();
+  const unexpiredMatches = deletedMatches.filter(
+    (deletedMatch) => deletedMatch.deletedAt + DELETED_MATCH_RETENTION_MS > Date.now(),
+  );
+  if (unexpiredMatches.length !== deletedMatches.length) {
+    await AsyncStorage.setItem(
+      DELETED_MATCHES_STORAGE_KEY,
+      JSON.stringify(unexpiredMatches),
+    );
+  }
+  return unexpiredMatches;
 }
 
 export async function getMatchFixture(matchId: string): Promise<MatchFixture | undefined> {
@@ -237,10 +287,49 @@ export async function saveMatchFixture(match: MatchFixture): Promise<void> {
   );
 }
 
-export async function deleteMatchFixture(matchId: string): Promise<void> {
+export async function softDeleteMatchFixture(matchId: string): Promise<void> {
   const matches = await getMatchFixtures();
+  const matchToDelete = matches.find((match) => match.id === matchId);
+  if (!matchToDelete) return;
+  const deletedMatches = await getDeletedMatchFixtures();
+  const nextDeletedMatches = [
+    ...deletedMatches.filter((deletedMatch) => deletedMatch.match.id !== matchId),
+    { match: matchToDelete, deletedAt: Date.now() },
+  ];
+  await AsyncStorage.setItem(
+    DELETED_MATCHES_STORAGE_KEY,
+    JSON.stringify(nextDeletedMatches),
+  );
   await AsyncStorage.setItem(
     MATCHES_STORAGE_KEY,
     JSON.stringify(matches.filter((match) => match.id !== matchId)),
+  );
+}
+
+export async function restoreDeletedMatchFixture(matchId: string): Promise<boolean> {
+  const deletedMatches = await getDeletedMatchFixtures();
+  const deletedMatch = deletedMatches.find((item) => item.match.id === matchId);
+  if (!deletedMatch) return false;
+
+  const matches = await getMatchFixtures();
+  await AsyncStorage.setItem(
+    MATCHES_STORAGE_KEY,
+    JSON.stringify([
+      ...matches.filter((match) => match.id !== matchId),
+      deletedMatch.match,
+    ]),
+  );
+  await AsyncStorage.setItem(
+    DELETED_MATCHES_STORAGE_KEY,
+    JSON.stringify(deletedMatches.filter((item) => item.match.id !== matchId)),
+  );
+  return true;
+}
+
+export async function permanentlyDeleteMatchFixture(matchId: string): Promise<void> {
+  const deletedMatches = await getDeletedMatchFixtures();
+  await AsyncStorage.setItem(
+    DELETED_MATCHES_STORAGE_KEY,
+    JSON.stringify(deletedMatches.filter((item) => item.match.id !== matchId)),
   );
 }

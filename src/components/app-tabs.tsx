@@ -26,6 +26,7 @@ export default function AppTabs() {
           <TabTrigger name="create-team" href="/create-team" style={styles.hiddenRoute} />
           <TabTrigger name="live-match" href="/live-match" style={styles.hiddenRoute} />
           <TabTrigger name="match-details" href="/match-details" style={styles.hiddenRoute} />
+          <TabTrigger name="deleted-matches" href="/deleted-matches" style={styles.hiddenRoute} />
         </View>
       </TabList>
     </Tabs>
