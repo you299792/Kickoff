@@ -236,3 +236,11 @@ export async function saveMatchFixture(match: MatchFixture): Promise<void> {
     JSON.stringify([...matches.filter((savedMatch) => savedMatch.id !== match.id), match]),
   );
 }
+
+export async function deleteMatchFixture(matchId: string): Promise<void> {
+  const matches = await getMatchFixtures();
+  await AsyncStorage.setItem(
+    MATCHES_STORAGE_KEY,
+    JSON.stringify(matches.filter((match) => match.id !== matchId)),
+  );
+}

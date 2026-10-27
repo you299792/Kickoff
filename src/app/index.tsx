@@ -1,12 +1,16 @@
-import { Fragment, useCallback, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { getMatchFixtures, type MatchFixture } from '@/data/matches';
+import {
+  deleteMatchFixture,
+  getMatchFixtures,
+  type MatchFixture,
+} from '@/data/matches';
 
 type Result = 'W' | 'D' | 'L';
 
@@ -75,6 +79,9 @@ export default function HomeScreen() {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [savedMatches, setSavedMatches] = useState<MatchFixture[]>([]);
   const [fixturesError, setFixturesError] = useState('');
+  const [deletingMatchId, setDeletingMatchId] = useState<string | null>(null);
+  const [matchActionsTarget, setMatchActionsTarget] = useState<MatchFixture | null>(null);
+  const longPressedMatchId = useRef<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -186,6 +193,38 @@ export default function HomeScreen() {
     router.push({ pathname: '/live-match', params: { matchId } });
   }
 
+  async function deleteMatch(matchId: string) {
+    if (deletingMatchId) return;
+    setDeletingMatchId(matchId);
+    setFixturesError('');
+    try {
+      await deleteMatchFixture(matchId);
+      setSavedMatches((matches) => matches.filter((match) => match.id !== matchId));
+    } catch (deleteError) {
+      setFixturesError(
+        deleteError instanceof Error ? deleteError.message : 'Unable to delete this match.',
+      );
+    } finally {
+      setDeletingMatchId(null);
+    }
+  }
+
+  function confirmDeleteMatch(match: MatchFixture) {
+    setMatchActionsTarget(null);
+    Alert.alert(
+      'Delete match?',
+      `${match.homeTeam.name} vs ${match.awayTeam.name} and its saved details will be permanently deleted.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => void deleteMatch(match.id),
+        },
+      ],
+    );
+  }
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -229,10 +268,18 @@ export default function HomeScreen() {
                 <ThemedText style={styles.fixturesError}>{fixturesError}</ThemedText>
               ) : null}
               {upcomingMatches.map((match) => (
-                <ThemedView
+                <Pressable
                   key={match.id}
-                  type="backgroundElement"
-                  style={styles.upcomingCard}>
+                  accessibilityRole="button"
+                  accessibilityLabel={`Hold to delete match between ${match.homeTeam.name} and ${match.awayTeam.name}`}
+                  accessibilityHint="Long press to show match actions"
+                  delayLongPress={450}
+                  onLongPress={() => {
+                    longPressedMatchId.current = match.id;
+                    setMatchActionsTarget(match);
+                  }}
+                  style={({ pressed }) => [pressed && styles.cardPressed]}>
+                  <ThemedView type="backgroundElement" style={styles.upcomingCard}>
                   <View style={styles.upcomingTeams}>
                     {[match.homeTeam, match.awayTeam].map((team, index) => (
                       <View key={team.id} style={styles.upcomingTeam}>
@@ -255,19 +302,22 @@ export default function HomeScreen() {
                   <ThemedText type="small" themeColor="textSecondary" style={styles.upcomingMeta}>
                     {[match.competition, match.date, match.venue].filter(Boolean).join(' · ')}
                   </ThemedText>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`${match.status === 'in-progress' ? 'Resume' : 'Open'} match between ${match.homeTeam.name} and ${match.awayTeam.name}`}
-                    onPress={() => openMatch(match.id)}
-                    style={({ pressed }) => [
-                      styles.upcomingAction,
-                      pressed && styles.chipPressed,
-                    ]}>
-                    <ThemedText style={styles.upcomingActionText}>
-                      {match.status === 'in-progress' ? 'Resume match' : 'Start match'}
-                    </ThemedText>
-                  </Pressable>
-                </ThemedView>
+                  <View style={styles.upcomingActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`${match.status === 'in-progress' ? 'Resume' : 'Open'} match between ${match.homeTeam.name} and ${match.awayTeam.name}`}
+                      onPress={() => openMatch(match.id)}
+                      style={({ pressed }) => [
+                        styles.upcomingAction,
+                        pressed && styles.chipPressed,
+                      ]}>
+                      <ThemedText style={styles.upcomingActionText}>
+                        {match.status === 'in-progress' ? 'Resume match' : 'Start match'}
+                      </ThemedText>
+                    </Pressable>
+                  </View>
+                  </ThemedView>
+                </Pressable>
               ))}
             </View>
           ) : null}
@@ -322,18 +372,38 @@ export default function HomeScreen() {
               const awayOutcome = result === 'D' ? 'DRAW' : awayWon ? 'WIN' : 'LOSS';
 
               return (
-                <Pressable
-                  key={match.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`View details: ${match.homeTeam} ${match.homeGoals}, ${match.awayTeam} ${match.awayGoals}`}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/match-details',
-                      params: { matchId: match.id },
-                    })
-                  }
-                  style={({ pressed }) => [pressed && styles.cardPressed]}>
-                  <ThemedView type="backgroundElement" style={styles.matchCard}>
+                <View key={match.id} style={styles.matchHistoryEntry}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`View details: ${match.homeTeam} ${match.homeGoals}, ${match.awayTeam} ${match.awayGoals}`}
+                    accessibilityHint="Long press to show match actions"
+                    delayLongPress={450}
+                    onLongPress={() => {
+                      const savedMatch = savedMatches.find((item) => item.id === match.id);
+                      if (savedMatch) {
+                        longPressedMatchId.current = match.id;
+                        setMatchActionsTarget(savedMatch);
+                      }
+                    }}
+                    onPress={() => {
+                      if (longPressedMatchId.current === match.id) {
+                        longPressedMatchId.current = null;
+                        return;
+                      }
+                      router.push({
+                          pathname: '/match-details',
+                          params: { matchId: match.id },
+                        });
+                    }}
+                    onPressOut={() => {
+                      setTimeout(() => {
+                        if (longPressedMatchId.current === match.id) {
+                          longPressedMatchId.current = null;
+                        }
+                      }, 350);
+                    }}
+                    style={({ pressed }) => [pressed && styles.cardPressed]}>
+                    <ThemedView type="backgroundElement" style={styles.matchCard}>
                     <View style={styles.cardTopRow}>
                       <View style={styles.cardMeta}>
                         <View
@@ -436,8 +506,9 @@ export default function HomeScreen() {
                       ) : null}
                       <ThemedText style={styles.viewDetailsText}>View match details ›</ThemedText>
                     </View>
-                  </ThemedView>
-                </Pressable>
+                    </ThemedView>
+                  </Pressable>
+                </View>
               );
             })}
 
@@ -468,6 +539,49 @@ export default function HomeScreen() {
           </View>
           <ThemedText style={styles.addButtonText}>New match</ThemedText>
         </Pressable>
+        <Modal
+          visible={matchActionsTarget !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setMatchActionsTarget(null)}>
+          <View style={styles.actionOverlay}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close match actions"
+              onPress={() => setMatchActionsTarget(null)}
+              style={StyleSheet.absoluteFill}
+            />
+            {matchActionsTarget ? (
+              <ThemedView type="backgroundElement" style={styles.actionPanel}>
+                <ThemedText type="subtitle" style={styles.actionTitle}>Match actions</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.actionSubtitle}>
+                  {matchActionsTarget.homeTeam.name} vs {matchActionsTarget.awayTeam.name}
+                </ThemedText>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete this match"
+                  disabled={deletingMatchId !== null}
+                  onPress={() => confirmDeleteMatch(matchActionsTarget)}
+                  style={({ pressed }) => [
+                    styles.overlayDeleteButton,
+                    pressed && styles.chipPressed,
+                    deletingMatchId !== null && styles.disabled,
+                  ]}>
+                  <ThemedText style={styles.overlayDeleteText}>Delete match</ThemedText>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setMatchActionsTarget(null)}
+                  style={({ pressed }) => [
+                    styles.overlayCancelButton,
+                    pressed && styles.chipPressed,
+                  ]}>
+                  <ThemedText style={styles.overlayCancelText}>Cancel</ThemedText>
+                </Pressable>
+              </ThemedView>
+            ) : null}
+          </View>
+        </Modal>
       </SafeAreaView>
     </ThemedView>
   );
@@ -553,6 +667,11 @@ const styles = StyleSheet.create({
     marginTop: Spacing.two,
     paddingVertical: Spacing.one,
   },
+  upcomingActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   upcomingActionText: {
     color: '#1f7a4d',
     fontSize: 14,
@@ -619,6 +738,7 @@ const styles = StyleSheet.create({
   chipPressed: {
     opacity: 0.75,
   },
+  disabled: { opacity: 0.5 },
   chipText: {
     fontWeight: '600',
   },
@@ -633,6 +753,7 @@ const styles = StyleSheet.create({
   matchList: {
     gap: Spacing.three,
   },
+  matchHistoryEntry: { gap: Spacing.one },
   matchCard: {
     padding: Spacing.three,
     borderRadius: Spacing.three,
@@ -730,6 +851,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  actionOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.four,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  actionPanel: {
+    width: '100%',
+    maxWidth: 360,
+    padding: Spacing.four,
+    borderRadius: Spacing.four,
+    gap: Spacing.two,
+  },
+  actionTitle: { fontSize: 20, fontWeight: '800' },
+  actionSubtitle: { marginBottom: Spacing.one },
+  overlayDeleteButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    backgroundColor: '#c0392b',
+  },
+  overlayDeleteText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  overlayCancelButton: {
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+  },
+  overlayCancelText: { fontSize: 14, fontWeight: '700' },
   emptyState: {
     padding: Spacing.four,
     borderRadius: Spacing.three,
