@@ -20,9 +20,9 @@ type Match = {
   homeGoals: number;
   awayGoals: number;
   scorers: string[];
+  winner?: 'home' | 'away';
+  penaltyScore?: string;
 };
-
-const matchHistory: Match[] = [];
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -45,6 +45,8 @@ const BADGE_COLORS = ['#1f7a4d', '#2f6fb5', '#8e44ad', '#c0392b', '#d97706', '#0
 const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
 
 function getResult(match: Match): Result {
+  if (match.winner === 'home') return 'W';
+  if (match.winner === 'away') return 'L';
   if (match.homeGoals > match.awayGoals) return 'W';
   if (match.homeGoals < match.awayGoals) return 'L';
   return 'D';
@@ -79,18 +81,18 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [filter, setFilter] = useState<FilterKey>('all');
-  const [upcomingMatches, setUpcomingMatches] = useState<MatchFixture[]>([]);
+  const [savedMatches, setSavedMatches] = useState<MatchFixture[]>([]);
   const [fixturesError, setFixturesError] = useState('');
 
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
-      async function loadUpcomingMatches() {
+      async function loadMatches() {
         setFixturesError('');
         try {
           const matches = await getMatchFixtures();
           if (isActive) {
-            setUpcomingMatches(matches.filter((match) => match.status !== 'completed'));
+            setSavedMatches(matches);
           }
         } catch (loadError) {
           if (isActive) {
@@ -100,11 +102,54 @@ export default function HomeScreen() {
           }
         }
       }
-      void loadUpcomingMatches();
+      void loadMatches();
       return () => {
         isActive = false;
       };
     }, []),
+  );
+
+  const upcomingMatches = useMemo(
+    () => savedMatches.filter((match) => match.status !== 'completed'),
+    [savedMatches],
+  );
+  const matchHistory = useMemo<Match[]>(
+    () =>
+      savedMatches
+        .filter((match) => match.status === 'completed')
+        .map((match) => {
+          const penaltyKicks = match.penaltyShootout?.kicks ?? [];
+          const homePenaltyGoals = penaltyKicks.filter(
+            (kick) => kick.teamId === match.homeTeam.id && kick.scored,
+          ).length;
+          const awayPenaltyGoals = penaltyKicks.filter(
+            (kick) => kick.teamId === match.awayTeam.id && kick.scored,
+          ).length;
+          const winnerTeamId = match.penaltyShootout?.winnerTeamId;
+          const winner: Match['winner'] =
+            winnerTeamId === match.homeTeam.id
+              ? 'home'
+              : winnerTeamId === match.awayTeam.id
+                ? 'away'
+                : undefined;
+          return {
+            id: match.id,
+            date: match.date,
+            competition: match.competition,
+            venue: match.venue,
+            homeTeam: match.homeTeam.name,
+            awayTeam: match.awayTeam.name,
+            homeGoals: match.homeGoals,
+            awayGoals: match.awayGoals,
+            scorers: match.goals.map((goal) => goal.playerName),
+            winner,
+            penaltyScore: winnerTeamId
+              ? `${homePenaltyGoals}–${awayPenaltyGoals}`
+              : undefined,
+          };
+        })
+        .reverse(),
+    [savedMatches],
   );
 
   const summary = useMemo(() => {
@@ -121,11 +166,11 @@ export default function HomeScreen() {
       losses: played - wins - draws,
       goalDifference: goalsFor - goalsAgainst,
     };
-  }, []);
+  }, [matchHistory]);
 
   const visibleMatches = useMemo(
     () => matchHistory.filter((match) => matchesFilter(match, filter)),
-    [filter],
+    [filter, matchHistory],
   );
 
   const stats = [
@@ -277,8 +322,8 @@ export default function HomeScreen() {
             {visibleMatches.map((match) => {
               const result = getResult(match);
               const resultStyle = RESULT_STYLES[result];
-              const homeWon = match.homeGoals > match.awayGoals;
-              const awayWon = match.awayGoals > match.homeGoals;
+              const homeWon = result === 'W';
+              const awayWon = result === 'L';
 
               return (
                 <ThemedView
@@ -355,6 +400,18 @@ export default function HomeScreen() {
                         {match.venue}
                       </ThemedText>
                     </View>
+                    {match.penaltyScore ? (
+                      <View style={styles.footerLine}>
+                        <ThemedText type="small">⚽</ThemedText>
+                        <ThemedText
+                          type="small"
+                          themeColor="textSecondary"
+                          style={styles.footerText}
+                          numberOfLines={1}>
+                          Won on penalties · {match.penaltyScore}
+                        </ThemedText>
+                      </View>
+                    ) : null}
                   </View>
                 </ThemedView>
               );

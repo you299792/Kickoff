@@ -279,13 +279,15 @@ export default function LiveMatchScreen() {
     status: MatchFixture['status'],
   ) {
     if (!match || busy) return false;
-    return persistMatch({
+    const saved = await persistMatch({
       ...match,
       elapsedSeconds: Math.floor(elapsedSeconds),
       startedAt: null,
       status,
       period: nextPeriod,
     });
+    if (saved && nextPeriod === 'completed') router.replace('/');
+    return saved;
   }
 
   async function endMatch() {
@@ -433,12 +435,13 @@ export default function LiveMatchScreen() {
       winnerTeamId,
     };
     setSelectedPenaltyTaker(null);
-    await persistMatch({
+    const saved = await persistMatch({
       ...match,
       status: winnerTeamId ? 'completed' : 'in-progress',
       period: winnerTeamId ? 'completed' : 'penalty-shootout',
       penaltyShootout: nextShootout,
     });
+    if (saved && winnerTeamId) router.replace('/');
   }
 
   function recordGoal(playerName: string) {
