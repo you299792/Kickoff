@@ -23,6 +23,19 @@ export type MatchCard = {
   elapsedSeconds: number;
 };
 
+export type MatchPenaltyKick = {
+  id: string;
+  teamId: string;
+  playerName: string;
+  scored: boolean;
+};
+
+export type MatchPenaltyShootout = {
+  firstKickingTeamId: string | null;
+  kicks: MatchPenaltyKick[];
+  winnerTeamId: string | null;
+};
+
 export type MatchPeriod =
   | 'regulation'
   | 'extra-time-first'
@@ -30,6 +43,7 @@ export type MatchPeriod =
   | 'extra-time-second'
   | 'full-time'
   | 'extra-time-full-time'
+  | 'penalty-shootout'
   | 'completed';
 
 export type MatchFixture = {
@@ -52,6 +66,7 @@ export type MatchFixture = {
   secondHalfAdditionalMinutes: number;
   period?: MatchPeriod;
   extraTimeHalfStartedAtSeconds?: number | null;
+  penaltyShootout?: MatchPenaltyShootout;
 };
 
 const MATCHES_STORAGE_KEY = '@kickoff/matches';
@@ -118,8 +133,39 @@ function isMatchPeriod(value: unknown): value is MatchPeriod {
     'extra-time-second',
     'full-time',
     'extra-time-full-time',
+    'penalty-shootout',
     'completed',
   ].includes(String(value));
+}
+
+function isMatchPenaltyShootout(
+  value: unknown,
+  homeTeam: MatchTeam,
+  awayTeam: MatchTeam,
+): value is MatchPenaltyShootout {
+  if (typeof value !== 'object' || value === null) return false;
+  const shootout = value as Record<string, unknown>;
+  const teamIds = [homeTeam.id, awayTeam.id];
+  return (
+    (shootout.firstKickingTeamId === null ||
+      (typeof shootout.firstKickingTeamId === 'string' &&
+        teamIds.includes(shootout.firstKickingTeamId))) &&
+    (shootout.winnerTeamId === null ||
+      (typeof shootout.winnerTeamId === 'string' &&
+        teamIds.includes(shootout.winnerTeamId))) &&
+    Array.isArray(shootout.kicks) &&
+    shootout.kicks.every((value) => {
+      if (typeof value !== 'object' || value === null) return false;
+      const kick = value as Record<string, unknown>;
+      return (
+        typeof kick.id === 'string' &&
+        typeof kick.teamId === 'string' &&
+        teamIds.includes(kick.teamId) &&
+        typeof kick.playerName === 'string' &&
+        typeof kick.scored === 'boolean'
+      );
+    })
+  );
 }
 
 function isMatchFixture(value: unknown): value is MatchFixture {
@@ -153,7 +199,9 @@ function isMatchFixture(value: unknown): value is MatchFixture {
     (match.extraTimeHalfStartedAtSeconds === undefined ||
       match.extraTimeHalfStartedAtSeconds === null ||
       (typeof match.extraTimeHalfStartedAtSeconds === 'number' &&
-        match.extraTimeHalfStartedAtSeconds >= 0))
+        match.extraTimeHalfStartedAtSeconds >= 0)) &&
+    (match.penaltyShootout === undefined ||
+      isMatchPenaltyShootout(match.penaltyShootout, match.homeTeam, match.awayTeam))
   );
 }
 

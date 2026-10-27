@@ -20,6 +20,7 @@ import {
   type MatchFixture,
   type MatchCard,
   type MatchGoal,
+  type MatchPenaltyShootout,
   type MatchPeriod,
   type MatchTeam,
 } from '@/data/matches';
@@ -89,6 +90,7 @@ export default function LiveMatchScreen() {
   const [cardModalVisible, setCardModalVisible] = useState(false);
   const [selectedCardTeam, setSelectedCardTeam] = useState<MatchTeam | null>(null);
   const [selectedCardPlayer, setSelectedCardPlayer] = useState<string | null>(null);
+  const [selectedPenaltyTaker, setSelectedPenaltyTaker] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -164,19 +166,22 @@ export default function LiveMatchScreen() {
     Boolean(match) &&
     secondHalfElapsed >= 40 * 60 &&
     secondHalfElapsed < 45 * 60 + (match?.secondHalfAdditionalMinutes ?? 0) * 60;
-  const matchClock = match
-    ? period === 'extra-time-first' || period === 'extra-time-second'
-      ? formatClock(extraTimeHalfElapsedSeconds)
-      : period === 'extra-time-break'
-        ? formatClock(15 * 60)
-        : period === 'extra-time-full-time'
-          ? formatClock(30 * 60)
-          : getMatchClock(
-              elapsedSeconds,
-              match.firstHalfAdditionalMinutes,
-              match.secondHalfAdditionalMinutes,
-            )
-    : '00:00';
+  const matchClock =
+    !match
+      ? '00:00'
+      : period === 'penalty-shootout'
+        ? 'PEN'
+        : period === 'extra-time-first' || period === 'extra-time-second'
+          ? formatClock(extraTimeHalfElapsedSeconds)
+          : period === 'extra-time-break'
+            ? formatClock(15 * 60)
+            : period === 'extra-time-full-time'
+              ? formatClock(30 * 60)
+              : getMatchClock(
+                  elapsedSeconds,
+                  match.firstHalfAdditionalMinutes,
+                  match.secondHalfAdditionalMinutes,
+                );
   const matchClockCaption =
     period === 'extra-time-first'
       ? 'EXTRA TIME · FIRST HALF'
@@ -186,8 +191,10 @@ export default function LiveMatchScreen() {
           ? 'EXTRA TIME · SECOND HALF'
           : period === 'extra-time-full-time'
             ? 'FULL TIME · AFTER EXTRA TIME'
-            : period === 'full-time' || period === 'completed'
-              ? 'FULL TIME'
+            : period === 'penalty-shootout'
+              ? 'PENALTY SHOOTOUT'
+              : period === 'full-time' || period === 'completed'
+                ? 'FULL TIME'
               : match?.startedAt
                 ? 'MATCH IN PROGRESS'
                 : 'MATCH CLOCK';
@@ -195,6 +202,33 @@ export default function LiveMatchScreen() {
     () => (selectedScoringTeam ? getTeamPlayers(selectedScoringTeam) : []),
     [selectedScoringTeam],
   );
+  const penaltyShootout = match?.penaltyShootout;
+  const penaltyKicks = penaltyShootout?.kicks ?? [];
+  const homePenaltyGoals = penaltyKicks.filter(
+    (kick) => kick.teamId === match?.homeTeam.id && kick.scored,
+  ).length;
+  const awayPenaltyGoals = penaltyKicks.filter(
+    (kick) => kick.teamId === match?.awayTeam.id && kick.scored,
+  ).length;
+  const homePenaltyKicks = penaltyKicks.filter(
+    (kick) => kick.teamId === match?.homeTeam.id,
+  ).length;
+  const awayPenaltyKicks = penaltyKicks.filter(
+    (kick) => kick.teamId === match?.awayTeam.id,
+  ).length;
+  const currentPenaltyTeam =
+    match && penaltyShootout?.firstKickingTeamId
+      ? penaltyKicks.length % 2 === 0
+        ? penaltyShootout.firstKickingTeamId === match.homeTeam.id
+          ? match.homeTeam
+          : match.awayTeam
+        : penaltyShootout.firstKickingTeamId === match.homeTeam.id
+          ? match.awayTeam
+          : match.homeTeam
+      : null;
+  const penaltyTakerOptions = currentPenaltyTeam ? getTeamPlayers(currentPenaltyTeam) : [];
+  const activePenaltyTaker =
+    selectedPenaltyTaker ?? penaltyTakerOptions[0]?.name ?? 'Taker not recorded';
 
   async function persistMatch(nextMatch: MatchFixture): Promise<boolean> {
     setBusy(true);
@@ -314,6 +348,99 @@ export default function LiveMatchScreen() {
     });
   }
 
+  async function startPenaltyShootout() {
+    if (!match || busy || !isTied || period !== 'extra-time-full-time') return;
+    await persistMatch({
+      ...match,
+      startedAt: null,
+      status: 'in-progress',
+      period: 'penalty-shootout',
+      penaltyShootout: {
+        firstKickingTeamId: null,
+        kicks: [],
+        winnerTeamId: null,
+      },
+    });
+  }
+
+  async function selectFirstPenaltyTeam(teamId: string) {
+    if (
+      !match ||
+      busy ||
+      period !== 'penalty-shootout' ||
+      !penaltyShootout ||
+      penaltyShootout.firstKickingTeamId !== null ||
+      penaltyShootout.kicks.length > 0 ||
+      (teamId !== match.homeTeam.id && teamId !== match.awayTeam.id)
+    ) {
+      return;
+    }
+    await persistMatch({
+      ...match,
+      penaltyShootout: { ...penaltyShootout, firstKickingTeamId: teamId },
+    });
+  }
+
+  async function recordPenaltyKick(scored: boolean) {
+    if (
+      !match ||
+      busy ||
+      period !== 'penalty-shootout' ||
+      !penaltyShootout ||
+      !currentPenaltyTeam
+    ) {
+      return;
+    }
+
+    const nextKicks = [
+      ...penaltyShootout.kicks,
+      {
+        id: createMatchId(),
+        teamId: currentPenaltyTeam.id,
+        playerName: activePenaltyTaker,
+        scored,
+      },
+    ];
+    const homeKicksTaken = nextKicks.filter(
+      (kick) => kick.teamId === match.homeTeam.id,
+    ).length;
+    const awayKicksTaken = nextKicks.filter(
+      (kick) => kick.teamId === match.awayTeam.id,
+    ).length;
+    const nextHomeScore = nextKicks.filter(
+      (kick) => kick.teamId === match.homeTeam.id && kick.scored,
+    ).length;
+    const nextAwayScore = nextKicks.filter(
+      (kick) => kick.teamId === match.awayTeam.id && kick.scored,
+    ).length;
+    let winnerTeamId: string | null = null;
+
+    if (homeKicksTaken < 5 || awayKicksTaken < 5) {
+      if (nextHomeScore > nextAwayScore + Math.max(0, 5 - awayKicksTaken)) {
+        winnerTeamId = match.homeTeam.id;
+      } else if (nextAwayScore > nextHomeScore + Math.max(0, 5 - homeKicksTaken)) {
+        winnerTeamId = match.awayTeam.id;
+      }
+    } else if (homeKicksTaken === awayKicksTaken && nextHomeScore !== nextAwayScore) {
+      winnerTeamId = nextHomeScore > nextAwayScore
+        ? match.homeTeam.id
+        : match.awayTeam.id;
+    }
+
+    const nextShootout: MatchPenaltyShootout = {
+      ...penaltyShootout,
+      kicks: nextKicks,
+      winnerTeamId,
+    };
+    setSelectedPenaltyTaker(null);
+    await persistMatch({
+      ...match,
+      status: winnerTeamId ? 'completed' : 'in-progress',
+      period: winnerTeamId ? 'completed' : 'penalty-shootout',
+      penaltyShootout: nextShootout,
+    });
+  }
+
   function recordGoal(playerName: string) {
     if (!match || !selectedScoringTeam || busy || !isMatchEditable) return;
     const goal: MatchGoal = {
@@ -395,20 +522,31 @@ export default function LiveMatchScreen() {
             <View
               style={[
                 styles.statusPill,
-                Boolean(match?.startedAt) && styles.statusPillLive,
+                (Boolean(match?.startedAt) || period === 'penalty-shootout') &&
+                  styles.statusPillLive,
               ]}>
               <View
-                style={[styles.statusDot, Boolean(match?.startedAt) && styles.statusDotLive]}
+                style={[
+                  styles.statusDot,
+                  (Boolean(match?.startedAt) || period === 'penalty-shootout') &&
+                    styles.statusDotLive,
+                ]}
               />
               <ThemedText
-                style={[styles.statusText, Boolean(match?.startedAt) && styles.statusTextLive]}>
+                style={[
+                  styles.statusText,
+                  (Boolean(match?.startedAt) || period === 'penalty-shootout') &&
+                    styles.statusTextLive,
+                ]}>
                 {period === 'completed'
                   ? 'FULL TIME'
-                  : match?.startedAt
-                    ? 'LIVE'
-                    : period === 'full-time' || period === 'extra-time-full-time'
-                      ? 'FULL TIME'
-                      : 'MATCH DAY'}
+                  : period === 'penalty-shootout'
+                    ? 'PENALTIES'
+                    : match?.startedAt
+                      ? 'LIVE'
+                      : period === 'full-time' || period === 'extra-time-full-time'
+                        ? 'FULL TIME'
+                        : 'MATCH DAY'}
               </ThemedText>
             </View>
           </View>
@@ -638,24 +776,199 @@ export default function LiveMatchScreen() {
                     Extra time complete · Match drawn
                   </ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
-                    The next step is a penalty shootout.
+                    Record a penalty shootout to decide the match.
                   </ThemedText>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityState={{ disabled: true }}
-                    disabled
-                    style={[
+                    onPress={startPenaltyShootout}
+                    disabled={busy}
+                    style={({ pressed }) => [
                       styles.periodActionButton,
-                      styles.periodActionDisabled,
-                      styles.disabled,
+                      styles.periodActionPrimary,
+                      pressed && styles.pressed,
+                      busy && styles.disabled,
                     ]}>
-                    <ThemedText style={styles.periodActionDisabledText}>
+                    <ThemedText style={styles.periodActionPrimaryText}>
                       Proceed to penalty shootout
                     </ThemedText>
                   </Pressable>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Penalty shootouts are not available yet.
+                </ThemedView>
+              ) : null}
+
+              {penaltyShootout ? (
+                <ThemedView type="backgroundElement" style={styles.periodCard}>
+                  <ThemedText style={styles.periodCardTitle}>
+                    {penaltyShootout.winnerTeamId
+                      ? 'Penalty shootout complete'
+                      : 'Penalty shootout'}
                   </ThemedText>
+                  {penaltyShootout.winnerTeamId ? (
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {(penaltyShootout.winnerTeamId === match.homeTeam.id
+                        ? match.homeTeam
+                        : match.awayTeam).name}{' '}
+                      won {homePenaltyGoals}–{awayPenaltyGoals} on penalties.
+                    </ThemedText>
+                  ) : (
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {penaltyShootout.firstKickingTeamId
+                        ? homePenaltyKicks < 5 || awayPenaltyKicks < 5
+                          ? 'Best of five kicks; the shootout ends early if the other team can no longer catch up.'
+                          : 'Sudden death: teams take one kick each until one team leads after both have kicked.'
+                        : 'Choose which team takes the first kick.'}
+                    </ThemedText>
+                  )}
+
+                  <View style={styles.penaltyScoreRow}>
+                    {[match.homeTeam, match.awayTeam].map((team) => {
+                      const isHomeTeam = team.id === match.homeTeam.id;
+                      return (
+                        <View key={team.id} style={styles.penaltyScoreTeam}>
+                          <ThemedText style={styles.penaltyTeamName} numberOfLines={1}>
+                            {team.name}
+                          </ThemedText>
+                          <ThemedText style={styles.penaltyScore}>
+                            {isHomeTeam ? homePenaltyGoals : awayPenaltyGoals}
+                          </ThemedText>
+                          <ThemedText type="small" themeColor="textSecondary">
+                            {isHomeTeam ? homePenaltyKicks : awayPenaltyKicks} kicks
+                          </ThemedText>
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  {!penaltyShootout.winnerTeamId &&
+                  !penaltyShootout.firstKickingTeamId ? (
+                    <View style={styles.teamChoices}>
+                      {[match.homeTeam, match.awayTeam].map((team) => (
+                        <Pressable
+                          key={team.id}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${team.name} kicks first`}
+                          disabled={busy}
+                          onPress={() => void selectFirstPenaltyTeam(team.id)}
+                          style={({ pressed }) => [
+                            styles.teamChoice,
+                            pressed && styles.pressed,
+                            busy && styles.disabled,
+                          ]}>
+                          <View style={[styles.choiceBadge, { backgroundColor: team.color }]}>
+                            <ThemedText style={styles.badgeText}>
+                              {team.name.slice(0, 2).toUpperCase()}
+                            </ThemedText>
+                          </View>
+                          <ThemedText style={styles.choiceTeamName}>{team.name}</ThemedText>
+                          <ThemedText themeColor="textSecondary" style={styles.choiceArrow}>›</ThemedText>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {!penaltyShootout.winnerTeamId && currentPenaltyTeam ? (
+                    <>
+                      <ThemedText style={styles.penaltyTurn}>
+                        {currentPenaltyTeam.name} to kick
+                      </ThemedText>
+                      {penaltyTakerOptions.length > 0 ? (
+                        <View style={styles.penaltyTakerList}>
+                          {penaltyTakerOptions.map((player, index) => {
+                            const isSelected = activePenaltyTaker === player.name;
+                            return (
+                              <Pressable
+                                key={`${player.number ?? index}-${player.name}`}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: isSelected, disabled: busy }}
+                                accessibilityLabel={`Select ${player.name} to take the penalty`}
+                                disabled={busy}
+                                onPress={() => setSelectedPenaltyTaker(player.name)}
+                                style={({ pressed }) => [
+                                  styles.penaltyTaker,
+                                  isSelected && styles.penaltyTakerSelected,
+                                  pressed && styles.pressed,
+                                  busy && styles.disabled,
+                                ]}>
+                                <ThemedText
+                                  style={[
+                                    styles.penaltyTakerText,
+                                    isSelected && styles.penaltyTakerTextSelected,
+                                  ]}>
+                                  {player.name}
+                                </ThemedText>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      ) : (
+                        <ThemedText type="small" themeColor="textSecondary">
+                          No squad players are listed; this kick will be recorded without a named taker.
+                        </ThemedText>
+                      )}
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Taker: {activePenaltyTaker}
+                      </ThemedText>
+                      <View style={styles.penaltyResultActions}>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Record penalty scored"
+                          disabled={busy}
+                          onPress={() => void recordPenaltyKick(true)}
+                          style={({ pressed }) => [
+                            styles.penaltyResultButton,
+                            styles.penaltyScoredButton,
+                            pressed && styles.pressed,
+                            busy && styles.disabled,
+                          ]}>
+                          <ThemedText style={styles.penaltyScoredButtonText}>Scored</ThemedText>
+                        </Pressable>
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Record penalty missed or saved"
+                          disabled={busy}
+                          onPress={() => void recordPenaltyKick(false)}
+                          style={({ pressed }) => [
+                            styles.penaltyResultButton,
+                            styles.penaltyMissedButton,
+                            pressed && styles.pressed,
+                            busy && styles.disabled,
+                          ]}>
+                          <ThemedText style={styles.penaltyMissedText}>Missed / saved</ThemedText>
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : null}
+
+                  {penaltyKicks.length > 0 ? (
+                    <View style={styles.penaltyKickList}>
+                      <ThemedText style={styles.penaltyTurn}>Kick history</ThemedText>
+                      {penaltyKicks.map((kick, index) => {
+                        const team =
+                          kick.teamId === match.homeTeam.id ? match.homeTeam : match.awayTeam;
+                        return (
+                          <View key={kick.id} style={styles.penaltyKickRow}>
+                            <ThemedText style={styles.penaltyKickNumber}>
+                              {index + 1}.
+                            </ThemedText>
+                            <View style={styles.penaltyKickInfo}>
+                              <ThemedText style={styles.penaltyKickPlayer}>
+                                {kick.playerName}
+                              </ThemedText>
+                              <ThemedText type="small" themeColor="textSecondary">
+                                {team.name}
+                              </ThemedText>
+                            </View>
+                            <ThemedText
+                              style={[
+                                styles.penaltyKickResult,
+                                kick.scored ? styles.penaltyScoredText : styles.penaltyMissedText,
+                              ]}>
+                              {kick.scored ? 'Scored' : 'Missed'}
+                            </ThemedText>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
                 </ThemedView>
               ) : null}
 
@@ -1365,12 +1678,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: HAIRLINE,
   },
-  periodActionDisabled: {
-    backgroundColor: 'rgba(128, 128, 128, 0.12)',
-  },
   periodActionPrimaryText: { color: '#fff', fontSize: 14, fontWeight: '800' },
   periodActionSecondaryText: { fontSize: 14, fontWeight: '700' },
-  periodActionDisabledText: { color: '#8f98a3', fontSize: 14, fontWeight: '700' },
   periodCard: {
     gap: Spacing.two,
     marginTop: Spacing.three,
@@ -1380,6 +1689,83 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE,
   },
   periodCardTitle: { fontSize: 16, fontWeight: '800' },
+  penaltyScoreRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  penaltyScoreTeam: {
+    flex: 1,
+    alignItems: 'center',
+    gap: Spacing.one,
+    padding: Spacing.two,
+    borderRadius: Spacing.two,
+    backgroundColor: 'rgba(128, 128, 128, 0.06)',
+  },
+  penaltyTeamName: { maxWidth: '100%', fontSize: 13, fontWeight: '700' },
+  penaltyScore: {
+    color: '#1f7a4d',
+    fontSize: 30,
+    lineHeight: 34,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  penaltyTurn: { fontSize: 14, fontWeight: '800' },
+  penaltyTakerList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.one,
+  },
+  penaltyTaker: {
+    minHeight: 38,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.two,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+  },
+  penaltyTakerSelected: {
+    borderColor: '#1f7a4d',
+    backgroundColor: 'rgba(31, 122, 77, 0.12)',
+  },
+  penaltyTakerText: { fontSize: 13, fontWeight: '600' },
+  penaltyTakerTextSelected: { color: '#1f7a4d', fontWeight: '800' },
+  penaltyResultActions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  penaltyResultButton: {
+    flex: 1,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.two,
+    borderRadius: Spacing.two,
+  },
+  penaltyScoredButton: { backgroundColor: '#1f7a4d' },
+  penaltyMissedButton: {
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+  },
+  penaltyScoredButtonText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  penaltyScoredText: { color: '#1f7a4d', fontSize: 13, fontWeight: '800' },
+  penaltyMissedText: { color: '#c0392b', fontSize: 13, fontWeight: '800' },
+  penaltyKickList: {
+    gap: Spacing.one,
+    marginTop: Spacing.one,
+    paddingTop: Spacing.two,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: HAIRLINE,
+  },
+  penaltyKickRow: {
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  penaltyKickNumber: { width: 24, color: '#8f98a3', fontSize: 13, fontWeight: '700' },
+  penaltyKickInfo: { flex: 1, gap: 2 },
+  penaltyKickPlayer: { fontSize: 13, fontWeight: '700' },
+  penaltyKickResult: { fontSize: 12, fontWeight: '800' },
   additionalTimeCard: {
     marginTop: Spacing.three,
     padding: Spacing.three,
