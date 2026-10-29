@@ -5,8 +5,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { MaxContentWidth, Spacing } from '@/constants/theme';
+import {
+  getAccentColor,
+  getBadgeBorderColor,
+  getContrastTextColor,
+  MaxContentWidth,
+  Spacing,
+} from '@/constants/theme';
 import { CreatedTeam, deleteCreatedTeam, getCreatedTeams } from '@/data/teams';
+import { useTheme } from '@/hooks/use-theme';
 
 type Form = 'W' | 'D' | 'L';
 
@@ -57,6 +64,7 @@ function initials(name: string) {
 
 export default function TeamsScreen() {
   const router = useRouter();
+  const colors = useTheme();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [createdTeams, setCreatedTeams] = useState<CreatedTeam[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -217,8 +225,17 @@ export default function TeamsScreen() {
                       pressed && styles.cardPressed,
                     ]}>
                     <View style={styles.cardHeader}>
-                      <View style={[styles.teamBadge, { backgroundColor: team.color }]}>
-                        <ThemedText style={styles.teamBadgeText}>
+                      <View
+                        style={[
+                          styles.teamBadge,
+                          {
+                            backgroundColor: team.color,
+                            borderWidth: 1,
+                            borderColor: getBadgeBorderColor(team.color),
+                          },
+                        ]}>
+                        <ThemedText
+                          style={[styles.teamBadgeText, { color: getContrastTextColor(team.color) }]}>
                           {initials(team.name)}
                         </ThemedText>
                       </View>
@@ -307,9 +324,16 @@ export default function TeamsScreen() {
                               );
                               return (
                                 <View key={slot} style={styles.playerRow}>
-                                  <View style={[styles.playerNumber, { borderColor: team.color }]}>
+                                  <View
+                                    style={[
+                                      styles.playerNumber,
+                                      { borderColor: getAccentColor(team.color, colors.text) },
+                                    ]}>
                                     <ThemedText
-                                      style={[styles.playerNumberText, { color: team.color }]}>
+                                      style={[
+                                        styles.playerNumberText,
+                                        { color: getAccentColor(team.color, colors.text) },
+                                      ]}>
                                       {player?.number ?? index + 1}
                                     </ThemedText>
                                   </View>
@@ -341,9 +365,15 @@ export default function TeamsScreen() {
                                 {reservePlayers.map((player) => (
                                   <View key={player.number} style={styles.playerRow}>
                                     <View
-                                      style={[styles.playerNumber, { borderColor: team.color }]}>
+                                      style={[
+                                        styles.playerNumber,
+                                        { borderColor: getAccentColor(team.color, colors.text) },
+                                      ]}>
                                       <ThemedText
-                                        style={[styles.playerNumberText, { color: team.color }]}>
+                                        style={[
+                                          styles.playerNumberText,
+                                          { color: getAccentColor(team.color, colors.text) },
+                                        ]}>
                                         {player.number}
                                       </ThemedText>
                                     </View>
