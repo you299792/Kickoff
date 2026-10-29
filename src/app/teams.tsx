@@ -318,11 +318,9 @@ export default function TeamsScreen() {
                       <View style={styles.metaDivider} />
                       <View style={styles.metaItem}>
                         <ThemedText type="small" themeColor="textSecondary">
-                          Record
+                          Matches
                         </ThemedText>
-                        <ThemedText style={styles.metaValue}>
-                          {team.wins}W · {team.draws}D · {team.losses}L
-                        </ThemedText>
+                        <ThemedText style={styles.metaValue}>{played}</ThemedText>
                       </View>
                       <View style={styles.metaDivider} />
                       <View style={styles.metaItem}>
@@ -331,6 +329,15 @@ export default function TeamsScreen() {
                         </ThemedText>
                         <ThemedText style={styles.metaValue}>{winRate}%</ThemedText>
                       </View>
+                    </View>
+
+                    <View style={styles.formRow}>
+                      <ThemedText type="small" themeColor="textSecondary" style={styles.formLabel}>
+                        Record
+                      </ThemedText>
+                      <ThemedText style={styles.recordValue} numberOfLines={1}>
+                        {team.wins}W · {team.draws}D · {team.losses}L
+                      </ThemedText>
                     </View>
 
                     <View style={styles.formRow}>
@@ -638,6 +645,7 @@ const styles = StyleSheet.create({
 
   formRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   formLabel: { width: 84 },
+  recordValue: { flex: 1, fontWeight: '700', fontSize: 14 },
   formDots: { flexDirection: 'row', gap: 6 },
   formDot: {
     width: 24,
