@@ -14,20 +14,22 @@ function formatMatchMinute(
   seconds: number,
   firstHalfAdditionalMinutes: number,
   secondHalfAdditionalMinutes: number,
+  halfLengthMinutes = 45,
 ) {
   const elapsed = Math.max(0, Math.floor(seconds));
-  const firstHalfEnd = 45 * 60 + firstHalfAdditionalMinutes * 60;
+  const halfLength = halfLengthMinutes * 60;
+  const firstHalfEnd = halfLength + firstHalfAdditionalMinutes * 60;
 
-  if (elapsed < 45 * 60) return `${Math.floor(elapsed / 60)}'`;
+  if (elapsed < halfLength) return `${Math.floor(elapsed / 60)}'`;
   if (elapsed < firstHalfEnd) {
-    return `45+${Math.floor((elapsed - 45 * 60) / 60) + 1}'`;
+    return `${halfLengthMinutes}+${Math.floor((elapsed - halfLength) / 60) + 1}'`;
   }
 
   const secondHalfElapsed = elapsed - firstHalfEnd;
-  if (secondHalfElapsed < 45 * 60) {
-    return `${45 + Math.floor(secondHalfElapsed / 60)}'`;
+  if (secondHalfElapsed < halfLength) {
+    return `${halfLengthMinutes + Math.floor(secondHalfElapsed / 60)}'`;
   }
-  return `90+${Math.floor((secondHalfElapsed - 45 * 60) / 60) + 1}'`;
+  return `${halfLengthMinutes * 2}+${Math.floor((secondHalfElapsed - halfLength) / 60) + 1}'`;
 }
 
 export default function MatchDetailsScreen() {
@@ -240,6 +242,7 @@ export default function MatchDetailsScreen() {
                               goal.elapsedSeconds,
                               match.firstHalfAdditionalMinutes,
                               match.secondHalfAdditionalMinutes,
+                              match.halfLengthMinutes,
                             )}
                           </ThemedText>
                           <View style={styles.eventInfo}>
@@ -280,6 +283,7 @@ export default function MatchDetailsScreen() {
                               card.elapsedSeconds,
                               match.firstHalfAdditionalMinutes,
                               match.secondHalfAdditionalMinutes,
+                              match.halfLengthMinutes,
                             )}
                           </ThemedText>
                           <View style={styles.eventInfo}>

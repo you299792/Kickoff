@@ -64,6 +64,7 @@ export type MatchFixture = {
   cards: MatchCard[];
   firstHalfAdditionalMinutes: number;
   secondHalfAdditionalMinutes: number;
+  halfLengthMinutes?: number;
   period?: MatchPeriod;
   extraTimeHalfStartedAtSeconds?: number | null;
   penaltyShootout?: MatchPenaltyShootout;
@@ -202,6 +203,8 @@ function isMatchFixture(value: unknown): value is MatchFixture {
     (match.secondHalfAdditionalMinutes === undefined ||
       (typeof match.secondHalfAdditionalMinutes === 'number' &&
         match.secondHalfAdditionalMinutes >= 0)) &&
+    (match.halfLengthMinutes === undefined ||
+      (typeof match.halfLengthMinutes === 'number' && match.halfLengthMinutes > 0)) &&
     (match.period === undefined || isMatchPeriod(match.period)) &&
     (match.extraTimeHalfStartedAtSeconds === undefined ||
       match.extraTimeHalfStartedAtSeconds === null ||
@@ -230,6 +233,7 @@ function normalizeMatchFixture(match: MatchFixture): MatchFixture {
     cards: match.cards ?? [],
     firstHalfAdditionalMinutes: match.firstHalfAdditionalMinutes ?? 0,
     secondHalfAdditionalMinutes: match.secondHalfAdditionalMinutes ?? 0,
+    halfLengthMinutes: match.halfLengthMinutes ?? 45,
     period: match.period ?? (match.status === 'completed' ? 'completed' : 'regulation'),
     extraTimeHalfStartedAtSeconds: match.extraTimeHalfStartedAtSeconds ?? null,
   };

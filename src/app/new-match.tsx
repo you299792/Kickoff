@@ -44,7 +44,13 @@ const MATCH_LINEUP_ROWS = [
   MATCH_LINEUP_SLOTS.slice(10),
 ];
 
-const MATCH_DURATION_MINUTES = 90;
+const MATCH_FORMATS = [
+  { id: 'lightning', label: 'Lightning', halfMinutes: 5, description: '2 × 5 minute halves' },
+  { id: 'quick', label: 'Quick', halfMinutes: 15, description: '2 × 15 minute halves' },
+  { id: 'standard', label: 'Standard', halfMinutes: 45, description: '2 × 45 minute halves' },
+  { id: 'extended', label: 'Extended', halfMinutes: 60, description: '2 × 60 minute halves' },
+] as const;
+const DEFAULT_MATCH_FORMAT_ID: (typeof MATCH_FORMATS)[number]['id'] = 'standard';
 const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
 
 export default function NewMatchScreen() {
@@ -63,7 +69,9 @@ export default function NewMatchScreen() {
   const [competition, setCompetition] = useState('League');
   const [location, setLocation] = useState('');
   const [date, setDate] = useState('');
-  const time = '';
+  const [time, setTime] = useState('');
+  const [matchFormatId, setMatchFormatId] =
+    useState<(typeof MATCH_FORMATS)[number]['id']>(DEFAULT_MATCH_FORMAT_ID);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
   const [savingMatch, setSavingMatch] = useState(false);
@@ -103,6 +111,12 @@ export default function NewMatchScreen() {
       };
     }, []),
   );
+
+  const matchFormat =
+    MATCH_FORMATS.find((format) => format.id === matchFormatId) ??
+    MATCH_FORMATS.find((format) => format.id === DEFAULT_MATCH_FORMAT_ID)!;
+  const halfLengthMinutes = matchFormat.halfMinutes;
+  const matchDurationMinutes = halfLengthMinutes * 2;
 
   const selectedTeam = teams.find((team) => team.id === selectedTeamId);
   const selectedOpponent = teams.find((team) => team.id === selectedOpponentId);
@@ -232,6 +246,7 @@ export default function NewMatchScreen() {
       cards: [],
       firstHalfAdditionalMinutes: 0,
       secondHalfAdditionalMinutes: 0,
+      halfLengthMinutes,
       period: 'regulation',
       extraTimeHalfStartedAtSeconds: null,
     };
@@ -388,6 +403,9 @@ export default function NewMatchScreen() {
                 <View style={styles.halfField}>
                   <CalendarDatePicker value={date} onChange={setDate} />
                 </View>
+                <View style={styles.halfField}>
+                  <KickoffTimePicker value={time} onChange={setTime} />
+                </View>
               </View>
             </FormSection>
 
@@ -395,22 +413,43 @@ export default function NewMatchScreen() {
             <FormSection
               step="4"
               title="Match format"
-              description="All fixtures use the standard 90-minute format.">
-              <View style={styles.durationCard}>
-                <View style={styles.durationIcon}>
-                  <ThemedText style={styles.durationIconText}>90</ThemedText>
-                </View>
-                <View style={styles.durationInfo}>
-                  <ThemedText style={styles.durationTitle}>
-                    {MATCH_DURATION_MINUTES} minutes
-                  </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    Fixed length - 45 min halves
-                  </ThemedText>
-                </View>
-                <View style={styles.fixedBadge}>
-                  <ThemedText style={styles.fixedBadgeText}>FIXED</ThemedText>
-                </View>
+              description="Choose how long each half should run.">
+              <View style={styles.formatOptions}>
+                {MATCH_FORMATS.map((format) => {
+                  const selected = format.id === matchFormatId;
+                  return (
+                    <Pressable
+                      key={format.id}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`${format.label}, ${format.halfMinutes * 2} minutes`}
+                      onPress={() => setMatchFormatId(format.id)}
+                      style={({ pressed }) => [
+                        styles.formatOption,
+                        selected && styles.formatOptionSelected,
+                        pressed && styles.pressed,
+                      ]}>
+                      <View style={[styles.durationIcon, selected && styles.durationIconSelected]}>
+                        <ThemedText
+                          style={[
+                            styles.durationIconText,
+                            selected && styles.durationIconTextSelected,
+                          ]}>
+                          {format.halfMinutes * 2}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.durationInfo}>
+                        <ThemedText style={styles.durationTitle}>{format.label}</ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {format.description}
+                        </ThemedText>
+                      </View>
+                      <View style={[styles.radio, selected && styles.radioSelected]}>
+                        {selected ? <View style={styles.radioDot} /> : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
               </View>
 
               <View style={styles.durationRow}>
@@ -418,7 +457,7 @@ export default function NewMatchScreen() {
                   <ThemedText type="small" themeColor="textSecondary">
                     First half
                   </ThemedText>
-                  <ThemedText style={styles.durationPillValue}>45&apos;</ThemedText>
+                  <ThemedText style={styles.durationPillValue}>{halfLengthMinutes}&apos;</ThemedText>
                 </View>
                 <View style={styles.durationPill}>
                   <ThemedText type="small" themeColor="textSecondary">
@@ -430,7 +469,7 @@ export default function NewMatchScreen() {
                   <ThemedText type="small" themeColor="textSecondary">
                     Second half
                   </ThemedText>
-                  <ThemedText style={styles.durationPillValue}>45&apos;</ThemedText>
+                  <ThemedText style={styles.durationPillValue}>{halfLengthMinutes}&apos;</ThemedText>
                 </View>
               </View>
             </FormSection>
@@ -532,9 +571,14 @@ export default function NewMatchScreen() {
                       value={location.trim() || 'Not specified'}
                     />
                     <ReviewDetail
+                      icon="◷"
+                      label="Kickoff time"
+                      value={formatReviewTime(time) ?? 'Not set'}
+                    />
+                    <ReviewDetail
                       icon="◴"
                       label="Duration"
-                      value={`${MATCH_DURATION_MINUTES} minutes · 45-minute halves`}
+                      value={`${matchFormat.label} · ${matchDurationMinutes} minutes · ${halfLengthMinutes}-minute halves`}
                     />
                     {notes.trim() ? (
                       <ReviewDetail icon="≡" label="Notes" value={notes.trim()} />
@@ -733,7 +777,7 @@ export default function NewMatchScreen() {
 
           <View style={[styles.footer, { backgroundColor: colors.background }]}>
             <View
-              accessibilityLabel={`${selectedTeam?.name ?? 'Your team'} versus ${selectedOpponent?.name ?? 'Opponent'}, ${MATCH_DURATION_MINUTES} minutes`}
+              accessibilityLabel={`${selectedTeam?.name ?? 'Your team'} versus ${selectedOpponent?.name ?? 'Opponent'}, ${matchDurationMinutes} minutes`}
               style={styles.fixturePreview}>
               <View style={styles.fixtureTeams}>
                 <View style={styles.fixtureTeam}>
@@ -768,7 +812,7 @@ export default function NewMatchScreen() {
               </View>
               <View style={styles.fixturePreviewMeta}>
                 <ThemedText style={styles.fixtureDuration}>
-                  {MATCH_DURATION_MINUTES} MIN
+                  {matchDurationMinutes} MIN
                 </ThemedText>
                 {location ? (
                   <ThemedText
@@ -1218,6 +1262,155 @@ function CalendarDatePicker({
                 accessibilityRole="button"
                 onPress={() => {
                   onChange(formatDateKey(pendingDate));
+                  setIsOpen(false);
+                }}
+                style={styles.datePickerDone}>
+                <ThemedText style={styles.datePickerDoneText}>Done</ThemedText>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
+    </View>
+  );
+}
+
+function formatTimeKey(selectedTime: Date) {
+  const hours = String(selectedTime.getHours()).padStart(2, '0');
+  const minutes = String(selectedTime.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
+}
+
+function timeFromKey(value: string): Date | undefined {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return undefined;
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return undefined;
+
+  const parsedTime = new Date();
+  parsedTime.setHours(hours, minutes, 0, 0);
+  return parsedTime;
+}
+
+function formatReviewTime(value: string) {
+  const timeValue = timeFromKey(value);
+  return timeValue?.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+function KickoffTimePicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (time: string) => void;
+}) {
+  const colors = useTheme();
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedTime = timeFromKey(value);
+  const [pendingTime, setPendingTime] = useState(selectedTime ?? new Date());
+  const displayTime = selectedTime?.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  function openTimePicker() {
+    const initialTime = selectedTime ?? new Date();
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: initialTime,
+        mode: 'time',
+        display: 'clock',
+        onChange: (event, pickedTime) => {
+          if (event.type === 'set' && pickedTime) {
+            onChange(formatTimeKey(pickedTime));
+          }
+        },
+      });
+      return;
+    }
+    setPendingTime(initialTime);
+    setIsOpen(true);
+  }
+
+  return (
+    <View style={styles.field}>
+      <ThemedText type="small" themeColor="textSecondary" style={styles.label}>
+        Kickoff time
+      </ThemedText>
+      {Platform.OS === 'web' ? (
+        <View style={styles.webDateInput}>
+          {createElement('input', {
+            type: 'time',
+            value,
+            'aria-label': 'Kickoff time',
+            onChange: (event: { currentTarget: { value: string } }) => {
+              if (event.currentTarget.value) onChange(event.currentTarget.value);
+            },
+            style: {
+              width: '100%',
+              height: 54,
+              boxSizing: 'border-box',
+              padding: '0 12px',
+              border: `1px solid ${HAIRLINE}`,
+              borderRadius: 8,
+              backgroundColor: 'rgba(128, 128, 128, 0.08)',
+              color: colors.text,
+              font: 'inherit',
+            },
+          })}
+        </View>
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={displayTime ? `Kickoff time: ${displayTime}` : 'Choose kickoff time'}
+          onPress={openTimePicker}
+          style={({ pressed }) => [
+            styles.input,
+            styles.datePickerTrigger,
+            { borderColor: HAIRLINE, backgroundColor: 'rgba(128, 128, 128, 0.08)' },
+            pressed && styles.pressed,
+          ]}>
+          <ThemedText
+            themeColor={displayTime ? undefined : 'textSecondary'}
+            style={styles.datePickerText}>
+            {displayTime ?? 'Select a time'}
+          </ThemedText>
+          <ThemedText themeColor="textSecondary" style={styles.datePickerIcon}>
+            ◷
+          </ThemedText>
+        </Pressable>
+      )}
+
+      {Platform.OS === 'ios' ? (
+        <Modal
+          visible={isOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsOpen(false)}>
+          <View style={styles.calendarModal}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close time picker"
+              onPress={() => setIsOpen(false)}
+              style={styles.calendarBackdrop}
+            />
+            <View style={[styles.calendarCard, { backgroundColor: colors.background }]}>
+              <ThemedText type="subtitle" style={styles.calendarTitle}>
+                Choose kickoff time
+              </ThemedText>
+              <DateTimePicker
+                value={pendingTime}
+                mode="time"
+                display="spinner"
+                accentColor="#1f7a4d"
+                onValueChange={(_event, nextTime) => setPendingTime(nextTime)}
+              />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  onChange(formatTimeKey(pendingTime));
                   setIsOpen(false);
                 }}
                 style={styles.datePickerDone}>
@@ -1762,39 +1955,34 @@ const styles = StyleSheet.create({
   fieldRow: { flexDirection: 'row', gap: Spacing.two },
   halfField: { flex: 1 },
 
-  durationCard: {
+  formatOptions: { gap: Spacing.two },
+  formatOption: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
     padding: Spacing.three,
     borderRadius: Spacing.two,
     borderWidth: 1,
+    borderColor: HAIRLINE,
+  },
+  formatOptionSelected: {
     borderColor: 'rgba(31, 122, 77, 0.35)',
     backgroundColor: 'rgba(31, 122, 77, 0.08)',
   },
+  durationIconSelected: { backgroundColor: 'rgba(31, 122, 77, 0.18)' },
+  durationIconTextSelected: { color: '#1f7a4d' },
+
   durationIcon: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(31, 122, 77, 0.18)',
+    backgroundColor: 'rgba(128, 128, 128, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  durationIconText: { fontSize: 14, fontWeight: '800', color: '#1f7a4d' },
+  durationIconText: { fontSize: 14, fontWeight: '800' },
   durationInfo: { flex: 1, gap: 2 },
   durationTitle: { fontSize: 18, fontWeight: '700' },
-  fixedBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    backgroundColor: '#1f7a4d',
-  },
-  fixedBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.6,
-  },
   durationRow: { flexDirection: 'row', gap: Spacing.two },
   durationPill: {
     flex: 1,

@@ -38,29 +38,31 @@ function getMatchClock(
   seconds: number,
   firstHalfAdditionalMinutes: number,
   secondHalfAdditionalMinutes: number,
+  halfLengthMinutes = 45,
 ) {
-  const firstHalfLength = 45 * 60;
+  const firstHalfLength = halfLengthMinutes * 60;
   const firstHalfEnd = firstHalfLength + firstHalfAdditionalMinutes * 60;
   const elapsed = Math.max(0, seconds);
 
   if (elapsed < firstHalfLength) return formatClock(elapsed);
   if (elapsed < firstHalfEnd) {
-    return `45+${formatClock(elapsed - firstHalfLength)}`;
+    return `${halfLengthMinutes}+${formatClock(elapsed - firstHalfLength)}`;
   }
 
   const secondHalfElapsed = elapsed - firstHalfEnd;
   if (secondHalfElapsed < firstHalfLength) {
     return formatClock(firstHalfLength + secondHalfElapsed);
   }
-  return `90+${formatClock(secondHalfElapsed - firstHalfLength)}`;
+  return `${halfLengthMinutes * 2}+${formatClock(secondHalfElapsed - firstHalfLength)}`;
 }
 
 function formatGoalTime(
   seconds: number,
   firstHalfAdditionalMinutes: number,
   secondHalfAdditionalMinutes: number,
+  halfLengthMinutes = 45,
 ) {
-  return `${getMatchClock(seconds, firstHalfAdditionalMinutes, secondHalfAdditionalMinutes)}'`;
+  return `${getMatchClock(seconds, firstHalfAdditionalMinutes, secondHalfAdditionalMinutes, halfLengthMinutes)}'`;
 }
 
 type MatchPlayerOption = { number?: number; name: string; position?: string };
@@ -137,6 +139,8 @@ export default function LiveMatchScreen() {
       (match.startedAt ? Math.max(0, now - match.startedAt) / 1000 : 0)
     : 0;
   const period = match?.period ?? 'regulation';
+  const halfLengthMinutes = match?.halfLengthMinutes ?? 45;
+  const halfLengthSeconds = halfLengthMinutes * 60;
   const extraTimeHalfElapsedSeconds =
     match?.extraTimeHalfStartedAtSeconds === null ||
     match?.extraTimeHalfStartedAtSeconds === undefined
@@ -146,26 +150,25 @@ export default function LiveMatchScreen() {
   const canAddExtraTime =
     Boolean(match) &&
     elapsedSeconds >=
-      (45 * 60 +
-        (match?.firstHalfAdditionalMinutes ?? 0) * 60 +
-        45 * 60);
+      halfLengthSeconds * 2 + (match?.firstHalfAdditionalMinutes ?? 0) * 60;
   const isTied = Boolean(match && match.homeGoals === match.awayGoals);
   const isMatchEditable =
     period === 'regulation' ||
     period === 'extra-time-first' ||
     period === 'extra-time-second';
   const firstHalfEndSeconds = match
-    ? 45 * 60 + match.firstHalfAdditionalMinutes * 60
-    : 45 * 60;
+    ? halfLengthSeconds + match.firstHalfAdditionalMinutes * 60
+    : halfLengthSeconds;
   const secondHalfElapsed = Math.max(0, elapsedSeconds - firstHalfEndSeconds);
+  const stoppageTimeWindowSeconds = Math.min(5 * 60, halfLengthSeconds);
   const firstHalfAdditionalTimeVisible =
     Boolean(match) &&
-    elapsedSeconds >= 40 * 60 &&
+    elapsedSeconds >= halfLengthSeconds - stoppageTimeWindowSeconds &&
     elapsedSeconds < firstHalfEndSeconds;
   const secondHalfAdditionalTimeVisible =
     Boolean(match) &&
-    secondHalfElapsed >= 40 * 60 &&
-    secondHalfElapsed < 45 * 60 + (match?.secondHalfAdditionalMinutes ?? 0) * 60;
+    secondHalfElapsed >= halfLengthSeconds - stoppageTimeWindowSeconds &&
+    secondHalfElapsed < halfLengthSeconds + (match?.secondHalfAdditionalMinutes ?? 0) * 60;
   const matchClock =
     !match
       ? '00:00'
@@ -181,6 +184,7 @@ export default function LiveMatchScreen() {
                   elapsedSeconds,
                   match.firstHalfAdditionalMinutes,
                   match.secondHalfAdditionalMinutes,
+                  halfLengthMinutes,
                 );
   const matchClockCaption =
     period === 'extra-time-first'
@@ -729,7 +733,7 @@ export default function LiveMatchScreen() {
                   <ThemedText type="small" themeColor="textSecondary">
                     {canAddExtraTime
                       ? 'End the match as a draw or play 30 minutes of extra time in two 15-minute halves.'
-                      : 'You can end the match as a draw. Extra time becomes available after 90 minutes.'}
+                      : `You can end the match as a draw. Extra time becomes available after ${halfLengthMinutes * 2} minutes.`}
                   </ThemedText>
                   <Pressable
                     accessibilityRole="button"
@@ -979,7 +983,7 @@ export default function LiveMatchScreen() {
                 <ThemedView type="backgroundElement" style={styles.additionalTimeCard}>
                   <View style={styles.additionalTimeHeader}>
                     <View style={styles.additionalTimeBadge}>
-                      <ThemedText style={styles.additionalTimeBadgeText}>45+</ThemedText>
+                      <ThemedText style={styles.additionalTimeBadgeText}>{halfLengthMinutes}+</ThemedText>
                     </View>
                     <View style={styles.additionalTimeInfo}>
                       <ThemedText style={styles.additionalTimeTitle}>
@@ -1030,7 +1034,7 @@ export default function LiveMatchScreen() {
                 <ThemedView type="backgroundElement" style={styles.additionalTimeCard}>
                   <View style={styles.additionalTimeHeader}>
                     <View style={[styles.additionalTimeBadge, styles.secondHalfBadge]}>
-                      <ThemedText style={styles.additionalTimeBadgeText}>90+</ThemedText>
+                      <ThemedText style={styles.additionalTimeBadgeText}>{halfLengthMinutes * 2}+</ThemedText>
                     </View>
                     <View style={styles.additionalTimeInfo}>
                       <ThemedText style={styles.additionalTimeTitle}>
@@ -1120,6 +1124,7 @@ export default function LiveMatchScreen() {
                             goal.elapsedSeconds,
                             match.firstHalfAdditionalMinutes,
                             match.secondHalfAdditionalMinutes,
+                            halfLengthMinutes,
                           )}
                         </ThemedText>
                       </View>
@@ -1184,6 +1189,7 @@ export default function LiveMatchScreen() {
                             card.elapsedSeconds,
                             match.firstHalfAdditionalMinutes,
                             match.secondHalfAdditionalMinutes,
+                            halfLengthMinutes,
                           )}
                         </ThemedText>
                       </View>
@@ -1258,6 +1264,7 @@ export default function LiveMatchScreen() {
                           elapsedSeconds,
                           match?.firstHalfAdditionalMinutes ?? 0,
                           match?.secondHalfAdditionalMinutes ?? 0,
+                          halfLengthMinutes,
                         )}`
                       : `At ${formatClock(elapsedSeconds)} match time`}
                   </ThemedText>
