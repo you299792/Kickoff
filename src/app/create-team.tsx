@@ -31,7 +31,7 @@ const STARTING_POSITIONS = [
 ] as const;
 
 type StartingPosition = (typeof STARTING_POSITIONS)[number]['code'];
-type PlayerDraft = { id: number; name: string; position: StartingPosition };
+type PlayerDraft = { id: number; name: string; number: number; position: StartingPosition };
 type PitchSlot = { id: string; label: string };
 
 const PITCH_ROWS: { label: string; slots: PitchSlot[] }[] = [
@@ -69,15 +69,23 @@ export default function CreateTeamScreen() {
   const teamId = typeof routeTeamId === 'string' ? routeTeamId : undefined;
   const colors = useTheme();
   const [teamName, setTeamName] = useState('');
-  const [captain, setCaptain] = useState('');
+  const [captainId, setCaptainId] = useState<number | null>(null);
+  const [showCaptainPicker, setShowCaptainPicker] = useState(false);
   const [homeGround, setHomeGround] = useState('');
   const [teamColor, setTeamColor] = useState(TEAM_COLOR_PALETTE[0]);
   const [showColorPalette, setShowColorPalette] = useState(false);
   const [players, setPlayers] = useState<PlayerDraft[]>([]);
   const [playerName, setPlayerName] = useState('');
+  const [playerNumber, setPlayerNumber] = useState('');
   const [playerPosition, setPlayerPosition] = useState<StartingPosition | null>(null);
+  const [playerFormError, setPlayerFormError] = useState('');
   const [nextPlayerId, setNextPlayerId] = useState(1);
-  const [showPlayers, setShowPlayers] = useState(false);
+  const [showPlayers, setShowPlayers] = useState(true);
+  const [editingPlayerId, setEditingPlayerId] = useState<number | null>(null);
+  const [editPlayerName, setEditPlayerName] = useState('');
+  const [editPlayerNumber, setEditPlayerNumber] = useState('');
+  const [editPlayerPosition, setEditPlayerPosition] = useState<StartingPosition | null>(null);
+  const [editPlayerFormError, setEditPlayerFormError] = useState('');
   const [showLineup, setShowLineup] = useState(false);
   const [lineup, setLineup] = useState<Record<string, number>>({});
   const [activePitchSlot, setActivePitchSlot] = useState<PitchSlot | null>(null);
@@ -99,6 +107,7 @@ export default function CreateTeamScreen() {
         const loadedPlayers: PlayerDraft[] = team.roster.map((player, index) => ({
           id: index + 1,
           name: player.name,
+          number: player.number,
           position: player.position,
         }));
         const assignedPlayerIds = new Set<number>();
@@ -113,10 +122,11 @@ export default function CreateTeamScreen() {
             return [[slotId, player.id]];
           }),
         );
+        const loadedCaptain = loadedPlayers.find((player) => player.name === team.captain);
 
         if (isActive) {
           setTeamName(team.name);
-          setCaptain(team.captain);
+          setCaptainId(loadedCaptain?.id ?? null);
           setHomeGround(team.homeGround);
           setTeamColor(team.color);
           setPlayers(loadedPlayers);
@@ -141,15 +151,23 @@ export default function CreateTeamScreen() {
 
   function resetForm() {
     setTeamName('');
-    setCaptain('');
+    setCaptainId(null);
+    setShowCaptainPicker(false);
     setHomeGround('');
     setTeamColor(TEAM_COLOR_PALETTE[0]);
     setShowColorPalette(false);
     setPlayers([]);
     setPlayerName('');
+    setPlayerNumber('');
     setPlayerPosition(null);
+    setPlayerFormError('');
     setNextPlayerId(1);
-    setShowPlayers(false);
+    setShowPlayers(true);
+    setEditingPlayerId(null);
+    setEditPlayerName('');
+    setEditPlayerNumber('');
+    setEditPlayerPosition(null);
+    setEditPlayerFormError('');
     setShowLineup(false);
     setLineup({});
     setActivePitchSlot(null);
@@ -169,6 +187,8 @@ export default function CreateTeamScreen() {
       if (player) savedLineup[slotId] = player.name;
     }
 
+    const captainName = players.find((player) => player.id === captainId)?.name.trim() ?? '';
+
     setIsSaving(true);
     setSaveError(null);
     try {
@@ -176,10 +196,10 @@ export default function CreateTeamScreen() {
         id: teamId ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name,
         color: teamColor,
-        captain: captain.trim(),
+        captain: captainName,
         homeGround: homeGround.trim(),
-        roster: players.map((player, index) => ({
-          number: index + 1,
+        roster: players.map((player) => ({
+          number: player.number,
           name: player.name,
           position: player.position,
         })),
@@ -199,15 +219,87 @@ export default function CreateTeamScreen() {
     }
   }
 
+  function getNextAvailableNumber(excludeId?: number) {
+    const used = new Set(
+      players.filter((player) => player.id !== excludeId).map((player) => player.number),
+    );
+    let candidate = 1;
+    while (used.has(candidate)) candidate += 1;
+    return candidate;
+  }
+
   function addPlayer() {
     const name = playerName.trim();
-    if (!name || !playerPosition) return;
+    if (!name || !playerPosition) {
+      setPlayerFormError('Enter a player name and select a position.');
+      return;
+    }
 
-    setPlayers((current) => [...current, { id: nextPlayerId, name, position: playerPosition }]);
+    const trimmedNumber = playerNumber.trim();
+    const number = trimmedNumber ? Number(trimmedNumber) : getNextAvailableNumber();
+    if (!Number.isInteger(number) || number <= 0) {
+      setPlayerFormError('Enter a valid shirt number.');
+      return;
+    }
+    const numberTaken = players.some((player) => player.number === number);
+    if (numberTaken) {
+      setPlayerFormError(`Shirt number ${number} is already taken.`);
+      return;
+    }
+
+    setPlayerFormError('');
+    setPlayers((current) => [...current, { id: nextPlayerId, name, number, position: playerPosition }]);
     setNextPlayerId((current) => current + 1);
     setPlayerName('');
+    setPlayerNumber('');
     setPlayerPosition(null);
-    setShowPlayers(false);
+    setShowPlayers(true);
+  }
+
+  function startEditPlayer(player: PlayerDraft) {
+    setEditingPlayerId(player.id);
+    setEditPlayerName(player.name);
+    setEditPlayerNumber(String(player.number));
+    setEditPlayerPosition(player.position);
+    setEditPlayerFormError('');
+  }
+
+  function cancelEditPlayer() {
+    setEditingPlayerId(null);
+    setEditPlayerName('');
+    setEditPlayerNumber('');
+    setEditPlayerPosition(null);
+    setEditPlayerFormError('');
+  }
+
+  function saveEditedPlayer() {
+    if (editingPlayerId === null) return;
+    const name = editPlayerName.trim();
+    if (!name || !editPlayerPosition) {
+      setEditPlayerFormError('Enter a player name and select a position.');
+      return;
+    }
+
+    const trimmedNumber = editPlayerNumber.trim();
+    const number = trimmedNumber ? Number(trimmedNumber) : getNextAvailableNumber(editingPlayerId);
+    if (!Number.isInteger(number) || number <= 0) {
+      setEditPlayerFormError('Enter a valid shirt number.');
+      return;
+    }
+    const numberTaken = players.some(
+      (player) => player.number === number && player.id !== editingPlayerId,
+    );
+    if (numberTaken) {
+      setEditPlayerFormError(`Shirt number ${number} is already taken.`);
+      return;
+    }
+
+    setPlayers((current) =>
+      current.map((player) =>
+        player.id === editingPlayerId ? { ...player, name, number, position: editPlayerPosition } : player,
+      ),
+    );
+    cancelEditPlayer();
   }
 
   function removePlayer(id: number) {
@@ -215,6 +307,8 @@ export default function CreateTeamScreen() {
     setLineup((current) =>
       Object.fromEntries(Object.entries(current).filter(([, playerId]) => playerId !== id)),
     );
+    if (captainId === id) setCaptainId(null);
+    if (editingPlayerId === id) cancelEditPlayer();
   }
 
   function assignPlayerToSlot(playerId: number | null) {
@@ -238,6 +332,8 @@ export default function CreateTeamScreen() {
   const reservePlayers = players.filter(
     (player) => player.name.trim().length > 0 && !Object.values(lineup).includes(player.id),
   );
+  const eligibleCaptains = players.filter((player) => player.name.trim().length > 0);
+  const captainPlayer = players.find((player) => player.id === captainId) ?? null;
 
   return (
     <ThemedView style={styles.container}>
@@ -293,14 +389,41 @@ export default function CreateTeamScreen() {
 
             <View style={styles.field}>
               <ThemedText style={styles.label}>Captain</ThemedText>
-              <TextInput
-                value={captain}
-                onChangeText={setCaptain}
-                placeholder="Add a captain"
-                placeholderTextColor={colors.textSecondary}
-                accessibilityLabel="Team captain"
-                style={[styles.input, { backgroundColor: colors.background, color: colors.text }]}
-              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={
+                  captainPlayer ? `Choose captain, currently ${captainPlayer.name}` : 'Choose captain'
+                }
+                disabled={eligibleCaptains.length === 0}
+                onPress={() => setShowCaptainPicker(true)}
+                style={({ pressed }) => [
+                  styles.colorPickerButton,
+                  pressed && styles.pressed,
+                  eligibleCaptains.length === 0 && styles.disabledControl,
+                ]}>
+                {captainPlayer ? (
+                  <View style={styles.captainNumberBadge}>
+                    <ThemedText style={styles.captainNumberBadgeText}>{captainPlayer.number}</ThemedText>
+                  </View>
+                ) : (
+                  <ThemedText style={styles.captainPickerIcon}>©</ThemedText>
+                )}
+                <View style={styles.colorPickerButtonTextGroup}>
+                  <ThemedText style={styles.colorPickerButtonTitle}>
+                    {captainPlayer ? captainPlayer.name : 'Choose a captain'}
+                  </ThemedText>
+                  <ThemedText themeColor="textSecondary" style={styles.selectedColorHex}>
+                    {eligibleCaptains.length === 0
+                      ? 'Add players first'
+                      : captainPlayer
+                        ? captainPlayer.position
+                        : 'Select from your squad'}
+                  </ThemedText>
+                </View>
+                <ThemedText themeColor="textSecondary" style={styles.colorPickerChevron}>
+                  ›
+                </ThemedText>
+              </Pressable>
             </View>
 
             <View style={styles.field}>
@@ -340,7 +463,7 @@ export default function CreateTeamScreen() {
                 <View style={styles.playersHeading}>
                   <ThemedText style={styles.label}>Players</ThemedText>
                   <ThemedText themeColor="textSecondary" style={styles.playersHint}>
-                    Enter a player and select their position before adding them.
+                    Enter a name, shirt number, and position, then add them to the squad.
                   </ThemedText>
                 </View>
                 <ThemedText themeColor="textSecondary" style={styles.playerCount}>
@@ -349,6 +472,16 @@ export default function CreateTeamScreen() {
               </View>
 
               <View style={styles.addPlayerRow}>
+                <TextInput
+                  value={playerNumber}
+                  onChangeText={(value) => setPlayerNumber(value.replace(/[^0-9]/g, ''))}
+                  placeholder={`#${getNextAvailableNumber()}`}
+                  placeholderTextColor={colors.textSecondary}
+                  accessibilityLabel="Shirt number"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  style={[styles.input, styles.playerNumberInput, { color: colors.text }]}
+                />
                 <TextInput
                   value={playerName}
                   onChangeText={setPlayerName}
@@ -360,6 +493,9 @@ export default function CreateTeamScreen() {
                   style={[styles.input, styles.playerNameInput, { color: colors.text }]}
                 />
               </View>
+              {playerFormError ? (
+                <ThemedText style={styles.playerFormError}>{playerFormError}</ThemedText>
+              ) : null}
               <ThemedText themeColor="textSecondary" style={styles.positionLabel}>
                 Starting position
               </ThemedText>
@@ -428,15 +564,40 @@ export default function CreateTeamScreen() {
                   {showPlayers ? (
                     <View style={styles.savedPlayersList}>
                       {players.map((player) => (
-                        <View key={player.id} style={styles.savedPlayer}>
-                          <View style={styles.savedPlayerInfo}>
-                            <ThemedText style={styles.savedPlayerName} numberOfLines={1}>
-                              {player.name}
+                        <View
+                          key={player.id}
+                          style={[
+                            styles.savedPlayer,
+                            editingPlayerId === player.id && styles.savedPlayerEditing,
+                          ]}>
+                          <View style={styles.savedPlayerNumberBadge}>
+                            <ThemedText style={styles.savedPlayerNumberBadgeText}>
+                              {player.number}
                             </ThemedText>
+                          </View>
+                          <View style={styles.savedPlayerInfo}>
+                            <View style={styles.savedPlayerNameRow}>
+                              <ThemedText style={styles.savedPlayerName} numberOfLines={1}>
+                                {player.name}
+                              </ThemedText>
+                              {captainId === player.id ? (
+                                <View style={styles.captainTag}>
+                                  <ThemedText style={styles.captainTagText}>C</ThemedText>
+                                </View>
+                              ) : null}
+                            </View>
                             <ThemedText style={styles.savedPlayerPosition}>
                               {player.position}
                             </ThemedText>
                           </View>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Edit ${player.name}`}
+                            onPress={() => startEditPlayer(player)}
+                            hitSlop={8}
+                            style={({ pressed }) => [styles.editPlayer, pressed && styles.pressed]}>
+                            <ThemedText style={styles.editPlayerText}>Edit</ThemedText>
+                          </Pressable>
                           <Pressable
                             accessibilityRole="button"
                             accessibilityLabel={`Remove ${player.name}`}
@@ -523,7 +684,7 @@ export default function CreateTeamScreen() {
                                       styles.pitchPlayerCode,
                                       assignedPlayer && styles.pitchPlayerTextAssigned,
                                     ]}>
-                                    {assignedPlayer ? assignedPlayer.id : slot.label}
+                                    {assignedPlayer ? assignedPlayer.number : slot.label}
                                   </ThemedText>
                                   <ThemedText
                                     numberOfLines={1}
@@ -638,6 +799,206 @@ export default function CreateTeamScreen() {
           </View>
         </Modal>
         <Modal
+          visible={showCaptainPicker}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowCaptainPicker(false)}>
+          <View style={styles.modalBackdrop}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close captain selection"
+              onPress={() => setShowCaptainPicker(false)}
+              style={StyleSheet.absoluteFill}
+            />
+            <ThemedView type="backgroundElement" style={styles.colorPaletteModal}>
+              <View style={styles.colorPaletteHeader}>
+                <View style={styles.playerPickerHeading}>
+                  <ThemedText style={styles.playerPickerTitle}>Choose captain</ThemedText>
+                  <ThemedText themeColor="textSecondary" style={styles.playerPickerHint}>
+                    Pick the player who will lead this team.
+                  </ThemedText>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close captain selection"
+                  onPress={() => setShowCaptainPicker(false)}
+                  hitSlop={8}
+                  style={styles.playerPickerClose}>
+                  <ThemedText themeColor="textSecondary" style={styles.playerPickerCloseText}>
+                    ×
+                  </ThemedText>
+                </Pressable>
+              </View>
+              <ScrollView style={styles.playerPickerList} keyboardShouldPersistTaps="handled">
+                {eligibleCaptains.map((player) => {
+                  const selected = captainId === player.id;
+                  return (
+                    <Pressable
+                      key={player.id}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Make ${player.name} captain`}
+                      onPress={() => {
+                        setCaptainId(player.id);
+                        setShowCaptainPicker(false);
+                      }}
+                      style={({ pressed }) => [
+                        styles.playerPickerOption,
+                        pressed && styles.pressed,
+                      ]}>
+                      <View style={styles.playerPickerBadge}>
+                        <ThemedText style={styles.playerPickerBadgeText}>{player.number}</ThemedText>
+                      </View>
+                      <View style={styles.reservePlayerInfo}>
+                        <ThemedText style={styles.playerPickerName} numberOfLines={1}>
+                          {player.name.trim()}
+                        </ThemedText>
+                        <ThemedText themeColor="textSecondary" style={styles.playerPickerPosition}>
+                          {player.position}
+                        </ThemedText>
+                      </View>
+                      {selected ? <ThemedText style={styles.captainPickerCheck}>✓</ThemedText> : null}
+                    </Pressable>
+                  );
+                })}
+                {eligibleCaptains.length === 0 ? (
+                  <ThemedText themeColor="textSecondary" style={styles.playerPickerEmpty}>
+                    Add players to the squad before choosing a captain.
+                  </ThemedText>
+                ) : null}
+              </ScrollView>
+              {captainId !== null ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setCaptainId(null);
+                    setShowCaptainPicker(false);
+                  }}
+                  style={({ pressed }) => [styles.clearAssignment, pressed && styles.pressed]}>
+                  <ThemedText style={styles.clearAssignmentText}>Clear captain</ThemedText>
+                </Pressable>
+              ) : null}
+            </ThemedView>
+          </View>
+        </Modal>
+        <Modal
+          visible={editingPlayerId !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={cancelEditPlayer}>
+          <View style={styles.modalBackdrop}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close player editor"
+              onPress={cancelEditPlayer}
+              style={StyleSheet.absoluteFill}
+            />
+            <ThemedView type="backgroundElement" style={styles.editPlayerModal}>
+              <View style={styles.colorPaletteHeader}>
+                <View style={styles.playerPickerHeading}>
+                  <ThemedText style={styles.playerPickerTitle}>Edit player</ThemedText>
+                  <ThemedText themeColor="textSecondary" style={styles.playerPickerHint}>
+                    Update their shirt number, name, and position.
+                  </ThemedText>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close player editor"
+                  onPress={cancelEditPlayer}
+                  hitSlop={8}
+                  style={styles.playerPickerClose}>
+                  <ThemedText themeColor="textSecondary" style={styles.playerPickerCloseText}>
+                    ×
+                  </ThemedText>
+                </Pressable>
+              </View>
+
+              <View style={styles.addPlayerRow}>
+                <TextInput
+                  value={editPlayerNumber}
+                  onChangeText={(value) => setEditPlayerNumber(value.replace(/[^0-9]/g, ''))}
+                  placeholder={`#${getNextAvailableNumber(editingPlayerId ?? undefined)}`}
+                  placeholderTextColor={colors.textSecondary}
+                  accessibilityLabel="Shirt number"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  style={[styles.input, styles.playerNumberInput, { color: colors.text }]}
+                />
+                <TextInput
+                  value={editPlayerName}
+                  onChangeText={setEditPlayerName}
+                  placeholder="Enter player name"
+                  placeholderTextColor={colors.textSecondary}
+                  accessibilityLabel="Player name"
+                  returnKeyType="done"
+                  onSubmitEditing={saveEditedPlayer}
+                  style={[styles.input, styles.playerNameInput, { color: colors.text }]}
+                />
+              </View>
+              {editPlayerFormError ? (
+                <ThemedText style={styles.playerFormError}>{editPlayerFormError}</ThemedText>
+              ) : null}
+              <ThemedText themeColor="textSecondary" style={styles.positionLabel}>
+                Starting position
+              </ThemedText>
+              <View style={styles.positionOptions}>
+                {STARTING_POSITIONS.map((position) => (
+                  <Pressable
+                    key={position.code}
+                    accessibilityRole="radio"
+                    accessibilityLabel={position.label}
+                    accessibilityState={{ selected: editPlayerPosition === position.code }}
+                    onPress={() => setEditPlayerPosition(position.code)}
+                    style={({ pressed }) => [
+                      styles.positionOption,
+                      editPlayerPosition === position.code && styles.positionOptionSelected,
+                      pressed && styles.pressed,
+                    ]}>
+                    <ThemedText
+                      style={[
+                        styles.positionOptionCode,
+                        editPlayerPosition === position.code && styles.positionOptionCodeSelected,
+                      ]}>
+                      {position.code}
+                    </ThemedText>
+                    <ThemedText
+                      style={[
+                        styles.positionOptionLabel,
+                        editPlayerPosition === position.code &&
+                          styles.positionOptionLabelSelected,
+                      ]}>
+                      {position.label}
+                    </ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View style={styles.editPlayerActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel editing player"
+                  onPress={cancelEditPlayer}
+                  style={({ pressed }) => [styles.cancelEditButton, pressed && styles.pressed]}>
+                  <ThemedText style={styles.cancelEditButtonText}>Cancel</ThemedText>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Save player changes"
+                  disabled={!editPlayerName.trim() || !editPlayerPosition}
+                  onPress={saveEditedPlayer}
+                  style={({ pressed }) => [
+                    styles.savePlayerButton,
+                    styles.editPlayerSaveButton,
+                    (!editPlayerName.trim() || !editPlayerPosition) && styles.savePlayerButtonDisabled,
+                    pressed && styles.pressed,
+                  ]}>
+                  <ThemedText style={styles.savePlayerButtonText}>Save changes</ThemedText>
+                </Pressable>
+              </View>
+            </ThemedView>
+          </View>
+        </Modal>
+        <Modal
           visible={activePitchSlot !== null}
           transparent
           animationType="fade"
@@ -678,7 +1039,7 @@ export default function CreateTeamScreen() {
                 <View style={styles.currentStarterCard}>
                   <View style={styles.currentStarterBadge}>
                     <ThemedText style={styles.currentStarterBadgeText}>
-                      {activeStarter.id}
+                      {activeStarter.number}
                     </ThemedText>
                   </View>
                   <View style={styles.currentStarterInfo}>
@@ -719,7 +1080,7 @@ export default function CreateTeamScreen() {
                         pressed && styles.pressed,
                       ]}>
                       <View style={styles.playerPickerBadge}>
-                        <ThemedText style={styles.playerPickerBadgeText}>{player.id}</ThemedText>
+                        <ThemedText style={styles.playerPickerBadgeText}>{player.number}</ThemedText>
                       </View>
                       <View style={styles.reservePlayerInfo}>
                         <ThemedText style={styles.playerPickerName} numberOfLines={1}>
@@ -820,7 +1181,40 @@ const styles = StyleSheet.create({
   colorPickerButtonTitle: { fontSize: 15, fontWeight: '600' },
   selectedColorHex: { fontSize: 12, fontWeight: '600', letterSpacing: 0.4 },
   colorPickerChevron: { fontSize: 26, lineHeight: 30 },
+  disabledControl: { opacity: 0.5 },
+  captainNumberBadge: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 19,
+    backgroundColor: '#d97706',
+  },
+  captainNumberBadgeText: { color: '#ffffff', fontSize: 14, fontWeight: '800' },
+  captainPickerIcon: {
+    width: 38,
+    height: 38,
+    lineHeight: 38,
+    textAlign: 'center',
+    fontSize: 18,
+    borderRadius: 19,
+    backgroundColor: 'rgba(128,128,128,0.14)',
+  },
+  captainPickerCheck: { color: '#1f7a4d', fontSize: 18, fontWeight: '800' },
   colorPaletteModal: { padding: Spacing.three, borderRadius: Spacing.three, gap: Spacing.three },
+  editPlayerModal: { padding: Spacing.three, borderRadius: Spacing.three, gap: Spacing.three },
+  editPlayerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  editPlayerSaveButton: { flex: 1 },
+  cancelEditButton: {
+    minHeight: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.three,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.35)',
+  },
+  cancelEditButtonText: { fontSize: 15, fontWeight: '600' },
   colorPaletteHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two },
   colorPaletteGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: Spacing.two },
   colorPaletteOption: {
@@ -842,7 +1236,9 @@ const styles = StyleSheet.create({
   playersHint: { fontSize: 13, lineHeight: 19 },
   playerCount: { fontSize: 14, fontWeight: '700', paddingHorizontal: Spacing.two },
   addPlayerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  playerNumberInput: { width: 64, textAlign: 'center' },
   playerNameInput: { flex: 1 },
+  playerFormError: { color: '#c0392b', fontSize: 13, fontWeight: '600' },
   savePlayerButton: {
     minHeight: 52,
     minWidth: 72,
@@ -873,37 +1269,66 @@ const styles = StyleSheet.create({
   savedPlayersList: { gap: Spacing.two },
   savedPlayer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'center',
+    gap: Spacing.two,
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.one,
     borderRadius: Spacing.two,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(128, 128, 128, 0.3)',
   },
+  savedPlayerEditing: {
+    borderColor: '#1f7a4d',
+    backgroundColor: 'rgba(31, 122, 77, 0.08)',
+  },
+  savedPlayerNumberBadge: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: 'rgba(128, 128, 128, 0.14)',
+  },
+  savedPlayerNumberBadgeText: { fontSize: 13, fontWeight: '800' },
   savedPlayerInfo: {
     flex: 1,
+    minWidth: 0,
     minHeight: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing.two,
+    justifyContent: 'center',
+    gap: 2,
   },
-  savedPlayerName: { flex: 1, fontSize: 15, fontWeight: '600' },
-  savedPlayerPosition: {
-    minWidth: 88,
-    overflow: 'hidden',
+  savedPlayerNameRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
+  savedPlayerName: { flexShrink: 1, fontSize: 15, fontWeight: '600' },
+  captainTag: {
+    width: 20,
+    height: 20,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    backgroundColor: '#d97706',
+  },
+  captainTagText: { color: '#ffffff', fontSize: 11, fontWeight: '800' },
+  savedPlayerPosition: {
+    alignSelf: 'flex-start',
+    overflow: 'hidden',
     paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
+    paddingVertical: 2,
     borderRadius: 999,
     backgroundColor: 'rgba(31, 122, 77, 0.12)',
     color: '#1f7a4d',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     textAlign: 'center',
   },
-  removePlayer: { width: 36, alignItems: 'center', paddingVertical: Spacing.one },
+  editPlayer: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.35)',
+  },
+  editPlayerText: { fontSize: 12, fontWeight: '700' },
+  removePlayer: { width: 28, alignItems: 'center', paddingVertical: Spacing.one },
   removePlayerText: { color: '#c0392b', fontSize: 22, lineHeight: 24, fontWeight: '500' },
   positionOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   positionOption: {

@@ -63,3 +63,50 @@ export const Spacing = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+/** WCAG relative luminance of a hex color, 0 (black) to 1 (white). */
+export function getColorLuminance(hexColor: string): number {
+  const hex = hexColor.replace('#', '');
+  const normalized =
+    hex.length === 3
+      ? hex
+          .split('')
+          .map((char) => char + char)
+          .join('')
+      : hex;
+  if (normalized.length !== 6) return 1;
+
+  const r = parseInt(normalized.slice(0, 2), 16) / 255;
+  const g = parseInt(normalized.slice(2, 4), 16) / 255;
+  const b = parseInt(normalized.slice(4, 6), 16) / 255;
+  const toLinear = (channel: number) =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+/** True for colors pale enough (e.g. white) to wash out against a light background. */
+export function isPaleColor(hexColor: string): boolean {
+  return getColorLuminance(hexColor) > 0.85;
+}
+
+/**
+ * Picks a readable label color (near-black or white) for text/icons drawn on
+ * top of a filled badge using an arbitrary team color.
+ */
+export function getContrastTextColor(hexColor: string): string {
+  return getColorLuminance(hexColor) > 0.55 ? '#111827' : '#ffffff';
+}
+
+/** A subtle border so pale team colors (e.g. white) still read as a badge. */
+export function getBadgeBorderColor(hexColor: string): string {
+  return isPaleColor(hexColor) ? 'rgba(0, 0, 0, 0.18)' : 'transparent';
+}
+
+/**
+ * For outline-style badges that use the team color directly as a border/text
+ * color (not a fill), falls back to `fallbackColor` when the team color is
+ * too pale to stay visible against the surrounding background.
+ */
+export function getAccentColor(hexColor: string, fallbackColor: string): string {
+  return isPaleColor(hexColor) ? fallbackColor : hexColor;
+}
