@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { getMatchFixture, type MatchFixture } from '@/data/matches';
+import { getMatchFixture, softDeleteMatchFixture, type MatchFixture } from '@/data/matches';
 
 const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
 
@@ -35,6 +35,7 @@ export default function MatchDetailsScreen() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const [match, setMatch] = useState<MatchFixture | null>(null);
   const [error, setError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -90,6 +91,36 @@ export default function MatchDetailsScreen() {
       (!penaltyWinnerId && match.awayGoals > match.homeGoals));
   const isDraw = match !== null && !homeWon && !awayWon;
 
+  async function deleteMatch() {
+    if (!match || isDeleting) return;
+    setIsDeleting(true);
+    setError('');
+    try {
+      await softDeleteMatchFixture(match.id);
+      router.replace('/');
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Unable to delete this match.');
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  function confirmDeleteMatch() {
+    if (!match) return;
+    Alert.alert(
+      'Are you sure you want to delete this match?',
+      `${match.homeTeam.name} vs ${match.awayTeam.name} can be restored for 30 days before it is permanently deleted.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Match',
+          style: 'destructive',
+          onPress: () => void deleteMatch(),
+        },
+      ],
+    );
+  }
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
@@ -105,11 +136,26 @@ export default function MatchDetailsScreen() {
 
           {match ? (
             <>
+              {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
               <View style={styles.header}>
-                <ThemedText type="title" style={styles.title}>Match details</ThemedText>
-                <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-                  {match.competition}
-                </ThemedText>
+                <View style={styles.headerTextGroup}>
+                  <ThemedText type="subtitle" style={styles.title}>Match details</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.subtitle}>
+                    {match.competition}
+                  </ThemedText>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete match between ${match.homeTeam.name} and ${match.awayTeam.name}`}
+                  disabled={isDeleting}
+                  onPress={confirmDeleteMatch}
+                  style={({ pressed }) => [
+                    styles.deleteButton,
+                    pressed && styles.pressed,
+                    isDeleting && styles.disabled,
+                  ]}>
+                  <ThemedText style={styles.deleteButtonText}>Delete</ThemedText>
+                </Pressable>
               </View>
 
               <ThemedView type="backgroundElement" style={styles.scoreCard}>
@@ -126,7 +172,7 @@ export default function MatchDetailsScreen() {
                         {match.homeTeam.name.slice(0, 2).toUpperCase()}
                       </ThemedText>
                     </View>
-                    <ThemedText style={styles.teamName} numberOfLines={2}>
+                    <ThemedText style={styles.teamName} numberOfLines={1}>
                       {match.homeTeam.name}
                     </ThemedText>
                     <ThemedText
@@ -154,7 +200,7 @@ export default function MatchDetailsScreen() {
                         {match.awayTeam.name.slice(0, 2).toUpperCase()}
                       </ThemedText>
                     </View>
-                    <ThemedText style={styles.teamName} numberOfLines={2}>
+                    <ThemedText style={styles.teamName} numberOfLines={1}>
                       {match.awayTeam.name}
                     </ThemedText>
                     <ThemedText
@@ -327,23 +373,42 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.two,
-    paddingBottom: Spacing.five,
+    paddingTop: Spacing.one,
+    paddingBottom: Spacing.four,
   },
   backButton: {
-    minHeight: 44,
+    minHeight: 36,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
   },
-  backText: { fontSize: 22, lineHeight: 24 },
+  backText: { fontSize: 20, lineHeight: 22 },
   pressed: { opacity: 0.65 },
-  header: { marginTop: Spacing.two, marginBottom: Spacing.three },
-  title: { fontSize: 32, lineHeight: 38, fontWeight: '800' },
-  subtitle: { marginTop: Spacing.one },
+  disabled: { opacity: 0.5 },
+  deleteButton: {
+    minHeight: 36,
+    paddingHorizontal: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: '#c0392b',
+  },
+  deleteButtonText: { color: '#c0392b', fontSize: 13, fontWeight: '800' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+    marginBottom: Spacing.two,
+  },
+  headerTextGroup: { flex: 1, minWidth: 0 },
+  title: { fontSize: 20, lineHeight: 24, fontWeight: '800' },
+  subtitle: { marginTop: 1 },
   scoreCard: {
-    padding: Spacing.three,
-    borderRadius: Spacing.four,
+    padding: Spacing.two,
+    borderRadius: Spacing.three,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: HAIRLINE,
   },
@@ -352,36 +417,36 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: Spacing.two,
-    paddingBottom: Spacing.two,
+    paddingBottom: Spacing.one,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: HAIRLINE,
   },
-  fullTime: { color: '#1f7a4d', fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
-  metaText: { fontSize: 11, textAlign: 'right' },
+  fullTime: { color: '#1f7a4d', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+  metaText: { fontSize: 10, textAlign: 'right' },
   scoreboard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.one,
-    paddingVertical: Spacing.four,
+    paddingVertical: Spacing.two,
   },
-  teamColumn: { flex: 1, alignItems: 'center', gap: Spacing.one },
+  teamColumn: { flex: 1, alignItems: 'center', gap: 2 },
   badge: {
-    width: 52,
-    height: 52,
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 26,
+    borderRadius: 19,
   },
-  badgeText: { color: '#fff', fontSize: 15, fontWeight: '800' },
-  teamName: { maxWidth: 120, fontSize: 14, fontWeight: '700', textAlign: 'center' },
-  outcome: { color: '#c0392b', fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+  badgeText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  teamName: { maxWidth: 120, fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  outcome: { color: '#c0392b', fontSize: 9, fontWeight: '800', letterSpacing: 0.6 },
   outcomeWin: { color: '#1f7a4d' },
   outcomeDraw: { color: '#b4821a' },
-  scoreCenter: { alignItems: 'center', minWidth: 100 },
-  score: { fontSize: 26, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  penaltyScore: { marginTop: Spacing.one, color: '#1f7a4d', fontSize: 12, fontWeight: '800' },
+  scoreCenter: { alignItems: 'center', minWidth: 80 },
+  score: { fontSize: 20, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  penaltyScore: { marginTop: 2, color: '#1f7a4d', fontSize: 11, fontWeight: '800' },
   venueRow: {
-    paddingTop: Spacing.two,
+    paddingTop: Spacing.one,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: HAIRLINE,
   },
@@ -389,49 +454,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
-    marginTop: Spacing.four,
-    marginBottom: Spacing.two,
+    marginTop: Spacing.two,
+    marginBottom: 4,
   },
-  sectionTitle: { fontSize: 20, lineHeight: 26, fontWeight: '800' },
+  sectionTitle: { fontSize: 15, lineHeight: 19, fontWeight: '800' },
   eventList: {
     overflow: 'hidden',
-    borderRadius: Spacing.three,
+    borderRadius: Spacing.two,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: HAIRLINE,
   },
   eventRow: {
-    minHeight: 64,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: HAIRLINE,
   },
   eventMinute: {
-    width: 42,
+    width: 36,
     color: '#1f7a4d',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
-  eventInfo: { flex: 1, gap: 2 },
-  eventTitle: { fontSize: 14, fontWeight: '700' },
-  goalMark: { color: '#1f7a4d', fontSize: 10, fontWeight: '800', letterSpacing: 0.6 },
-  cardMark: { width: 14, height: 20, borderRadius: 2 },
-  kickResult: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  eventInfo: { flex: 1, gap: 1 },
+  eventTitle: { fontSize: 13, fontWeight: '700' },
+  goalMark: { color: '#1f7a4d', fontSize: 9, fontWeight: '800', letterSpacing: 0.6 },
+  cardMark: { width: 11, height: 16, borderRadius: 2 },
+  kickResult: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
   kickScored: { color: '#1f7a4d' },
   kickMissed: { color: '#c0392b' },
   emptyCard: {
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
+    padding: Spacing.two,
+    borderRadius: Spacing.two,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: HAIRLINE,
   },
   notesCard: {
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
+    padding: Spacing.two,
+    borderRadius: Spacing.two,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: HAIRLINE,
   },
