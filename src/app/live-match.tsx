@@ -141,6 +141,8 @@ export default function LiveMatchScreen() {
   const period = match?.period ?? 'regulation';
   const halfLengthMinutes = match?.halfLengthMinutes ?? 45;
   const halfLengthSeconds = halfLengthMinutes * 60;
+  const isSecondHalf =
+    match?.secondHalfStartedAtSeconds !== null && match?.secondHalfStartedAtSeconds !== undefined;
   const extraTimeHalfElapsedSeconds =
     match?.extraTimeHalfStartedAtSeconds === null ||
     match?.extraTimeHalfStartedAtSeconds === undefined
@@ -163,12 +165,16 @@ export default function LiveMatchScreen() {
   const stoppageTimeWindowSeconds = Math.min(5 * 60, halfLengthSeconds);
   const firstHalfAdditionalTimeVisible =
     Boolean(match) &&
-    elapsedSeconds >= halfLengthSeconds - stoppageTimeWindowSeconds &&
-    elapsedSeconds < firstHalfEndSeconds;
+    period === 'regulation' &&
+    !isSecondHalf &&
+    elapsedSeconds >= halfLengthSeconds - stoppageTimeWindowSeconds;
   const secondHalfAdditionalTimeVisible =
     Boolean(match) &&
+    period === 'regulation' &&
+    isSecondHalf &&
     secondHalfElapsed >= halfLengthSeconds - stoppageTimeWindowSeconds &&
     secondHalfElapsed < halfLengthSeconds + (match?.secondHalfAdditionalMinutes ?? 0) * 60;
+  const matchHasStarted = Boolean(match?.startedAt) || (match?.elapsedSeconds ?? 0) > 0;
   const matchClock =
     !match
       ? '00:00'
@@ -180,12 +186,14 @@ export default function LiveMatchScreen() {
             ? formatClock(15 * 60)
             : period === 'extra-time-full-time'
               ? formatClock(30 * 60)
-              : getMatchClock(
-                  elapsedSeconds,
-                  match.firstHalfAdditionalMinutes,
-                  match.secondHalfAdditionalMinutes,
-                  halfLengthMinutes,
-                );
+              : period === 'half-time'
+                ? formatClock(elapsedSeconds)
+                : getMatchClock(
+                    elapsedSeconds,
+                    match.firstHalfAdditionalMinutes,
+                    match.secondHalfAdditionalMinutes,
+                    halfLengthMinutes,
+                  );
   const matchClockCaption =
     period === 'extra-time-first'
       ? 'EXTRA TIME · FIRST HALF'
@@ -199,9 +207,13 @@ export default function LiveMatchScreen() {
               ? 'PENALTY SHOOTOUT'
               : period === 'full-time' || period === 'completed'
                 ? 'FULL TIME'
-              : match?.startedAt
-                ? 'MATCH IN PROGRESS'
-                : 'MATCH CLOCK';
+                : period === 'half-time'
+                  ? 'HALF TIME'
+                  : period === 'regulation' && matchHasStarted
+                    ? isSecondHalf
+                      ? 'SECOND HALF'
+                      : 'FIRST HALF'
+                    : 'MATCH CLOCK';
   const selectedPlayers = useMemo(
     () => (selectedScoringTeam ? getTeamPlayers(selectedScoringTeam) : []),
     [selectedScoringTeam],
@@ -309,6 +321,22 @@ export default function LiveMatchScreen() {
       const status = isTied ? 'in-progress' : 'completed';
       await persistStoppedPeriod(nextPeriod, status);
     }
+  }
+
+  async function endFirstHalf() {
+    if (!match || busy || period !== 'regulation' || isSecondHalf) return;
+    await persistStoppedPeriod('half-time', 'in-progress');
+  }
+
+  async function startSecondHalf() {
+    if (!match || busy || period !== 'half-time') return;
+    await persistMatch({
+      ...match,
+      startedAt: getCurrentTimestamp(),
+      status: 'in-progress',
+      period: 'regulation',
+      secondHalfStartedAtSeconds: Math.floor(elapsedSeconds),
+    });
   }
 
   async function endAsDraw() {
@@ -659,7 +687,23 @@ export default function LiveMatchScreen() {
                   <ThemedText style={styles.cardButtonText}>▰  Record a card</ThemedText>
                 </Pressable>
 
-                {period === 'regulation' ? (
+                {period === 'regulation' && !isSecondHalf ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={endFirstHalf}
+                    disabled={busy || match.status === 'completed'}
+                    style={({ pressed }) => [
+                      styles.periodActionButton,
+                      styles.periodActionSecondary,
+                      pressed && styles.pressed,
+                      (busy || match.status === 'completed') && styles.disabled,
+                    ]}>
+                    <ThemedText style={styles.periodActionSecondaryText}>
+                      Proceed to half time
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
+                {period === 'regulation' && isSecondHalf ? (
                   <Pressable
                     accessibilityRole="button"
                     onPress={endMatch}
@@ -672,6 +716,22 @@ export default function LiveMatchScreen() {
                     ]}>
                     <ThemedText style={styles.periodActionSecondaryText}>
                       End match and go to full time
+                    </ThemedText>
+                  </Pressable>
+                ) : null}
+                {period === 'half-time' ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={startSecondHalf}
+                    disabled={busy}
+                    style={({ pressed }) => [
+                      styles.periodActionButton,
+                      styles.periodActionPrimary,
+                      pressed && styles.pressed,
+                      busy && styles.disabled,
+                    ]}>
+                    <ThemedText style={styles.periodActionPrimaryText}>
+                      Start second half
                     </ThemedText>
                   </Pressable>
                 ) : null}
@@ -765,6 +825,15 @@ export default function LiveMatchScreen() {
                       </ThemedText>
                     </Pressable>
                   ) : null}
+                </ThemedView>
+              ) : null}
+
+              {period === 'half-time' ? (
+                <ThemedView type="backgroundElement" style={styles.periodCard}>
+                  <ThemedText style={styles.periodCardTitle}>Half time</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    The first half is complete. Start the second half when ready.
+                  </ThemedText>
                 </ThemedView>
               ) : null}
 

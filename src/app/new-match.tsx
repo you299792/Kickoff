@@ -248,6 +248,7 @@ export default function NewMatchScreen() {
       secondHalfAdditionalMinutes: 0,
       halfLengthMinutes,
       period: 'regulation',
+      secondHalfStartedAtSeconds: null,
       extraTimeHalfStartedAtSeconds: null,
     };
 
