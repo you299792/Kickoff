@@ -12,6 +12,7 @@ import {
   MaxContentWidth,
   Spacing,
 } from '@/constants/theme';
+import { getMatchFixtures, type MatchFixture } from '@/data/matches';
 import { CreatedTeam, deleteCreatedTeam, getCreatedTeams } from '@/data/teams';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -62,11 +63,26 @@ function initials(name: string) {
     .join('');
 }
 
+/** Result of a completed match from the given team's perspective, or null if they didn't play in it. */
+function getMatchResultForTeam(match: MatchFixture, teamId: string): Form | null {
+  const isHome = match.homeTeam.id === teamId;
+  const isAway = match.awayTeam.id === teamId;
+  if (!isHome && !isAway) return null;
+
+  const winnerTeamId = match.penaltyShootout?.winnerTeamId;
+  if (winnerTeamId) return winnerTeamId === teamId ? 'W' : 'L';
+  if (match.homeGoals === match.awayGoals) return 'D';
+
+  const homeWon = match.homeGoals > match.awayGoals;
+  return (isHome && homeWon) || (isAway && !homeWon) ? 'W' : 'L';
+}
+
 export default function TeamsScreen() {
   const router = useRouter();
   const colors = useTheme();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [createdTeams, setCreatedTeams] = useState<CreatedTeam[]>([]);
+  const [completedMatches, setCompletedMatches] = useState<MatchFixture[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -76,7 +92,7 @@ export default function TeamsScreen() {
     useCallback(() => {
       let isActive = true;
 
-      async function loadTeams() {
+      async function loadTeamsAndMatches() {
         try {
           const savedTeams = await getCreatedTeams();
           if (isActive) {
@@ -88,21 +104,49 @@ export default function TeamsScreen() {
             setLoadError(error instanceof Error ? error.message : 'Unable to load saved teams.');
           }
         }
+
+        try {
+          const matches = await getMatchFixtures();
+          if (isActive) {
+            setCompletedMatches(matches.filter((match) => match.status === 'completed'));
+          }
+        } catch {
+          // Win/loss records are a bonus on top of the squad list, so a match-data
+          // failure here shouldn't block the teams screen from rendering.
+          if (isActive) setCompletedMatches([]);
+        }
       }
 
-      void loadTeams();
+      void loadTeamsAndMatches();
       return () => {
         isActive = false;
       };
     }, []),
   );
 
+  const teamStatsById = useMemo(() => {
+    const statsById = new Map<string, { wins: number; draws: number; losses: number; form: Form[] }>();
+    for (const team of createdTeams) {
+      let wins = 0;
+      let draws = 0;
+      let losses = 0;
+      const form: Form[] = [];
+      for (const match of completedMatches) {
+        const result = getMatchResultForTeam(match, team.id);
+        if (!result) continue;
+        if (result === 'W') wins += 1;
+        else if (result === 'D') draws += 1;
+        else losses += 1;
+        form.push(result);
+      }
+      statsById.set(team.id, { wins, draws, losses, form: form.slice(-5) });
+    }
+    return statsById;
+  }, [createdTeams, completedMatches]);
+
   const teams: Team[] = createdTeams.map((team) => ({
     ...team,
-    form: [],
-    wins: 0,
-    draws: 0,
-    losses: 0,
+    ...(teamStatsById.get(team.id) ?? { wins: 0, draws: 0, losses: 0, form: [] }),
   }));
 
   const summary = useMemo(() => {
