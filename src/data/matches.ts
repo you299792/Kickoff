@@ -12,6 +12,7 @@ export type MatchGoal = {
   id: string;
   teamId: string;
   playerName: string;
+  assistPlayerName?: string;
   elapsedSeconds: number;
 };
 
@@ -117,6 +118,7 @@ function isMatchGoal(value: unknown): value is MatchGoal {
     typeof goal.id === 'string' &&
     typeof goal.teamId === 'string' &&
     typeof goal.playerName === 'string' &&
+    (goal.assistPlayerName === undefined || typeof goal.assistPlayerName === 'string') &&
     typeof goal.elapsedSeconds === 'number' &&
     goal.elapsedSeconds >= 0
   );

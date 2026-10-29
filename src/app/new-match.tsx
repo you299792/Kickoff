@@ -46,7 +46,7 @@ const MATCH_LINEUP_ROWS = [
 
 const MATCH_FORMATS = [
   { id: 'lightning', label: 'Lightning', halfMinutes: 5, description: '2 × 5 minute halves' },
-  { id: 'quick', label: 'Quick', halfMinutes: 15, description: '2 × 15 minute halves' },
+  { id: 'quick', label: 'Quick', halfMinutes: 10, description: '2 × 10 minute halves' },
   { id: 'standard', label: 'Standard', halfMinutes: 45, description: '2 × 45 minute halves' },
   { id: 'extended', label: 'Extended', halfMinutes: 60, description: '2 × 60 minute halves' },
 ] as const;

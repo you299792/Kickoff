@@ -249,6 +249,7 @@ export default function MatchDetailsScreen() {
                             <ThemedText style={styles.eventTitle}>{goal.playerName}</ThemedText>
                             <ThemedText type="small" themeColor="textSecondary">
                               {team.name}
+                              {goal.assistPlayerName ? ` · Assist: ${goal.assistPlayerName}` : ''}
                             </ThemedText>
                           </View>
                           <ThemedText style={styles.goalMark}>GOAL</ThemedText>

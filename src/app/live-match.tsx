@@ -67,6 +67,14 @@ function formatGoalTime(
 
 type MatchPlayerOption = { number?: number; name: string; position?: string };
 
+const PLAYER_POSITION_ORDER: Record<string, number> = { FW: 0, MF: 1, DF: 2, GK: 3 };
+
+function comparePlayersByPosition(a: MatchPlayerOption, b: MatchPlayerOption) {
+  const aRank = a.position ? PLAYER_POSITION_ORDER[a.position] ?? 99 : 99;
+  const bRank = b.position ? PLAYER_POSITION_ORDER[b.position] ?? 99 : 99;
+  return aRank - bRank;
+}
+
 function getTeamPlayers(team: MatchTeam) {
   const roster = team.roster ?? [];
   const assignedNames = Object.values(team.lineup);
@@ -75,8 +83,11 @@ function getTeamPlayers(team: MatchTeam) {
     .filter(
       (player, index, players) =>
         players.findIndex((item) => item.name === player.name) === index,
-    );
-  const reserves = roster.filter((player) => !assignedNames.includes(player.name));
+    )
+    .sort(comparePlayersByPosition);
+  const reserves = roster
+    .filter((player) => !assignedNames.includes(player.name))
+    .sort(comparePlayersByPosition);
   return [...starters, ...reserves];
 }
 
@@ -89,6 +100,11 @@ export default function LiveMatchScreen() {
   const [error, setError] = useState('');
   const [goalModalVisible, setGoalModalVisible] = useState(false);
   const [selectedScoringTeam, setSelectedScoringTeam] = useState<MatchTeam | null>(null);
+  const [pendingAssist, setPendingAssist] = useState<{
+    goalId: string;
+    team: MatchTeam;
+    scorerName: string;
+  } | null>(null);
   const [cardModalVisible, setCardModalVisible] = useState(false);
   const [selectedCardTeam, setSelectedCardTeam] = useState<MatchTeam | null>(null);
   const [selectedCardPlayer, setSelectedCardPlayer] = useState<string | null>(null);
@@ -141,6 +157,8 @@ export default function LiveMatchScreen() {
   const period = match?.period ?? 'regulation';
   const halfLengthMinutes = match?.halfLengthMinutes ?? 45;
   const halfLengthSeconds = halfLengthMinutes * 60;
+  const extraTimeHalfMinutes = Math.min(halfLengthMinutes, 15);
+  const extraTimeHalfSeconds = extraTimeHalfMinutes * 60;
   const isSecondHalf =
     match?.secondHalfStartedAtSeconds !== null && match?.secondHalfStartedAtSeconds !== undefined;
   const extraTimeHalfElapsedSeconds =
@@ -148,7 +166,7 @@ export default function LiveMatchScreen() {
     match?.extraTimeHalfStartedAtSeconds === undefined
       ? 0
       : Math.max(0, elapsedSeconds - match.extraTimeHalfStartedAtSeconds);
-  const canEndExtraTimeHalf = extraTimeHalfElapsedSeconds >= 15 * 60;
+  const canEndExtraTimeHalf = extraTimeHalfElapsedSeconds >= extraTimeHalfSeconds;
   const canAddExtraTime =
     Boolean(match) &&
     elapsedSeconds >=
@@ -183,9 +201,9 @@ export default function LiveMatchScreen() {
         : period === 'extra-time-first' || period === 'extra-time-second'
           ? formatClock(extraTimeHalfElapsedSeconds)
           : period === 'extra-time-break'
-            ? formatClock(15 * 60)
+            ? formatClock(extraTimeHalfSeconds)
             : period === 'extra-time-full-time'
-              ? formatClock(30 * 60)
+              ? formatClock(extraTimeHalfSeconds * 2)
               : period === 'half-time'
                 ? formatClock(elapsedSeconds)
                 : getMatchClock(
@@ -217,6 +235,15 @@ export default function LiveMatchScreen() {
   const selectedPlayers = useMemo(
     () => (selectedScoringTeam ? getTeamPlayers(selectedScoringTeam) : []),
     [selectedScoringTeam],
+  );
+  const assistOptions = useMemo(
+    () =>
+      pendingAssist
+        ? getTeamPlayers(pendingAssist.team).filter(
+            (player) => player.name !== pendingAssist.scorerName,
+          )
+        : [],
+    [pendingAssist],
   );
   const penaltyShootout = match?.penaltyShootout;
   const penaltyKicks = penaltyShootout?.kicks ?? [];
@@ -476,18 +503,19 @@ export default function LiveMatchScreen() {
     if (saved && winnerTeamId) router.replace('/');
   }
 
-  function recordGoal(playerName: string) {
+  async function recordGoal(playerName: string) {
     if (!match || !selectedScoringTeam || busy || !isMatchEditable) return;
+    const scoringTeam = selectedScoringTeam;
     const goal: MatchGoal = {
       id: createMatchId(),
-      teamId: selectedScoringTeam.id,
+      teamId: scoringTeam.id,
       playerName,
       elapsedSeconds: Math.floor(
         match.elapsedSeconds +
           (match.startedAt ? Math.max(0, getCurrentTimestamp() - match.startedAt) / 1000 : 0),
       ),
     };
-    const isHomeGoal = selectedScoringTeam.id === match.homeTeam.id;
+    const isHomeGoal = scoringTeam.id === match.homeTeam.id;
     const nextMatch: MatchFixture = {
       ...match,
       homeGoals: match.homeGoals + (isHomeGoal ? 1 : 0),
@@ -496,7 +524,23 @@ export default function LiveMatchScreen() {
     };
     setGoalModalVisible(false);
     setSelectedScoringTeam(null);
-    void persistMatch(nextMatch);
+    const saved = await persistMatch(nextMatch);
+    if (saved) {
+      setPendingAssist({ goalId: goal.id, team: scoringTeam, scorerName: playerName });
+    }
+  }
+
+  async function recordAssist(assistPlayerName: string) {
+    if (!match || !pendingAssist || busy) return;
+    const nextGoals = match.goals.map((goal) =>
+      goal.id === pendingAssist.goalId ? { ...goal, assistPlayerName } : goal,
+    );
+    const saved = await persistMatch({ ...match, goals: nextGoals });
+    if (saved) setPendingAssist(null);
+  }
+
+  function skipAssist() {
+    setPendingAssist(null);
   }
 
   function undoLastGoal() {
@@ -763,7 +807,7 @@ export default function LiveMatchScreen() {
                       busy && styles.disabled,
                     ]}>
                     <ThemedText style={styles.periodActionPrimaryText}>
-                      Start second 15-minute half
+                      Start second {extraTimeHalfMinutes}-minute half
                     </ThemedText>
                   </Pressable>
                 ) : null}
@@ -792,7 +836,7 @@ export default function LiveMatchScreen() {
                   <ThemedText style={styles.periodCardTitle}>Full time · Match drawn</ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
                     {canAddExtraTime
-                      ? 'End the match as a draw or play 30 minutes of extra time in two 15-minute halves.'
+                      ? `End the match as a draw or play ${extraTimeHalfMinutes * 2} minutes of extra time in two ${extraTimeHalfMinutes}-minute halves.`
                       : `You can end the match as a draw. Extra time becomes available after ${halfLengthMinutes * 2} minutes.`}
                   </ThemedText>
                   <Pressable
@@ -821,7 +865,7 @@ export default function LiveMatchScreen() {
                         busy && styles.disabled,
                       ]}>
                       <ThemedText style={styles.periodActionPrimaryText}>
-                        Add 30 minutes of extra time
+                        Add {extraTimeHalfMinutes * 2} minutes of extra time
                       </ThemedText>
                     </Pressable>
                   ) : null}
@@ -841,7 +885,8 @@ export default function LiveMatchScreen() {
                 <ThemedView type="backgroundElement" style={styles.periodCard}>
                   <ThemedText style={styles.periodCardTitle}>Extra-time half-time</ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
-                    The first 15-minute half is complete. Start the second half when ready.
+                    The first {extraTimeHalfMinutes}-minute half is complete. Start the second half
+                    when ready.
                   </ThemedText>
                 </ThemedView>
               ) : null}
@@ -1186,6 +1231,7 @@ export default function LiveMatchScreen() {
                           <ThemedText style={styles.scorerName}>{goal.playerName}</ThemedText>
                           <ThemedText type="small" themeColor="textSecondary">
                             {scoringTeam.name}
+                            {goal.assistPlayerName ? ` · Assist: ${goal.assistPlayerName}` : ''}
                           </ThemedText>
                         </View>
                         <ThemedText style={styles.goalTimestamp}>
@@ -1381,7 +1427,7 @@ export default function LiveMatchScreen() {
                         accessibilityRole="button"
                         accessibilityLabel={`Select ${player.name} as scorer for ${selectedScoringTeam.name}`}
                         disabled={busy}
-                        onPress={() => recordGoal(player.name)}
+                        onPress={() => void recordGoal(player.name)}
                         style={({ pressed }) => [
                           styles.playerChoice,
                           pressed && styles.pressed,
@@ -1418,6 +1464,73 @@ export default function LiveMatchScreen() {
                 }}
                 style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
                 <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+              </Pressable>
+            </ThemedView>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={pendingAssist !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={skipAssist}>
+          <View style={styles.assistOverlayBackdrop}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss assist prompt"
+              onPress={skipAssist}
+              style={StyleSheet.absoluteFill}
+            />
+            <ThemedView type="backgroundElement" style={styles.assistCard}>
+              <ThemedText style={styles.assistEmoji}>⚽</ThemedText>
+              <ThemedText type="subtitle" style={styles.assistTitle}>
+                Goal! Add an assist?
+              </ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.assistSubtitle}>
+                {pendingAssist
+                  ? `${pendingAssist.scorerName} · ${pendingAssist.team.name}`
+                  : ''}
+              </ThemedText>
+              {assistOptions.length > 0 ? (
+                <View style={styles.assistChips}>
+                  {assistOptions.map((player, index) => (
+                    <Pressable
+                      key={`${player.number ?? index}-${player.name}`}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${player.name} assisted the goal`}
+                      disabled={busy}
+                      onPress={() => void recordAssist(player.name)}
+                      style={({ pressed }) => [
+                        styles.assistChip,
+                        pressed && styles.pressed,
+                        busy && styles.disabled,
+                      ]}>
+                      <ThemedText style={styles.assistChipNumber}>
+                        {player.number ?? index + 1}
+                      </ThemedText>
+                      <ThemedText style={styles.assistChipName} numberOfLines={1}>
+                        {player.name}
+                      </ThemedText>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : (
+                <ThemedText themeColor="textSecondary" style={styles.noPlayers}>
+                  No other players available to credit an assist.
+                </ThemedText>
+              )}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="No assist for this goal"
+                onPress={skipAssist}
+                disabled={busy}
+                style={({ pressed }) => [
+                  styles.cancelButton,
+                  styles.assistSkipButton,
+                  pressed && styles.pressed,
+                  busy && styles.disabled,
+                ]}>
+                <ThemedText style={styles.cancelButtonText}>No assist</ThemedText>
               </Pressable>
             </ThemedView>
           </View>
@@ -2064,6 +2177,44 @@ const styles = StyleSheet.create({
   playerName: { fontSize: 14, fontWeight: '700' },
   addGoalMark: { color: '#1f7a4d', fontSize: 22, fontWeight: '700' },
   noPlayers: { paddingVertical: Spacing.four, textAlign: 'center' },
+  assistOverlayBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.four,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  assistCard: {
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+    gap: Spacing.one,
+    padding: Spacing.four,
+    borderRadius: Spacing.four,
+  },
+  assistEmoji: { fontSize: 32 },
+  assistTitle: { textAlign: 'center' },
+  assistSubtitle: { textAlign: 'center', marginBottom: Spacing.two },
+  assistChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    marginBottom: Spacing.three,
+  },
+  assistChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+  },
+  assistChipNumber: { fontSize: 12, fontWeight: '800', opacity: 0.6 },
+  assistChipName: { fontSize: 14, fontWeight: '700', maxWidth: 140 },
+  assistSkipButton: { width: '100%', marginTop: 0 },
   cardTypeChoices: { gap: Spacing.two },
   cardTypeButton: {
     minHeight: 72,
