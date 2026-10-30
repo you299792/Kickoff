@@ -94,12 +94,12 @@ export default function MatchDetailsScreen() {
   const [error, setError] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
-    goals: true,
-    discipline: true,
-    substitutions: true,
-    minutes: true,
-    penalties: true,
-    notes: true,
+    goals: false,
+    discipline: false,
+    substitutions: false,
+    minutes: false,
+    penalties: false,
+    notes: false,
   });
 
   function toggleSection(key: keyof typeof expandedSections) {
@@ -109,6 +109,15 @@ export default function MatchDetailsScreen() {
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
+
+      setExpandedSections({
+        goals: false,
+        discipline: false,
+        substitutions: false,
+        minutes: false,
+        penalties: false,
+        notes: false,
+      });
 
       async function loadMatch() {
         if (!matchId) {
