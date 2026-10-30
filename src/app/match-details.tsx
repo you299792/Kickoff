@@ -304,6 +304,49 @@ export default function MatchDetailsScreen() {
                 </ThemedView>
               )}
 
+              <View style={styles.sectionHeader}>
+                <ThemedText type="subtitle" style={styles.sectionTitle}>Substitutions</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary">
+                  {(match.substitutions ?? []).length}
+                </ThemedText>
+              </View>
+              {(match.substitutions ?? []).length > 0 ? (
+                <View style={styles.eventList}>
+                  {[...(match.substitutions ?? [])]
+                    .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds)
+                    .map((sub) => {
+                      const team =
+                        sub.teamId === match.homeTeam.id ? match.homeTeam : match.awayTeam;
+                      return (
+                        <View key={sub.id} style={styles.eventRow}>
+                          <ThemedText style={styles.eventMinute}>
+                            {formatMatchMinute(
+                              sub.elapsedSeconds,
+                              match.firstHalfAdditionalMinutes,
+                              match.secondHalfAdditionalMinutes,
+                              match.halfLengthMinutes,
+                            )}
+                          </ThemedText>
+                          <View style={styles.eventInfo}>
+                            <ThemedText style={styles.eventTitle}>
+                              {sub.playerInName} for {sub.playerOutName}
+                            </ThemedText>
+                            <ThemedText type="small" themeColor="textSecondary">
+                              {team.name}
+                              {sub.isConcussion ? ' · Concussion substitute' : ''}
+                            </ThemedText>
+                          </View>
+                          <ThemedText style={styles.subMark}>⇄</ThemedText>
+                        </View>
+                      );
+                    })}
+                </View>
+              ) : (
+                <ThemedView type="backgroundElement" style={styles.emptyCard}>
+                  <ThemedText type="small" themeColor="textSecondary">No substitutions recorded.</ThemedText>
+                </ThemedView>
+              )}
+
               {match.penaltyShootout ? (
                 <>
                   <View style={styles.sectionHeader}>
@@ -490,6 +533,7 @@ const styles = StyleSheet.create({
   eventTitle: { fontSize: 13, fontWeight: '700' },
   goalMark: { color: '#1f7a4d', fontSize: 9, fontWeight: '800', letterSpacing: 0.6 },
   cardMark: { width: 11, height: 16, borderRadius: 2 },
+  subMark: { color: '#2f6fb5', fontSize: 13, fontWeight: '800' },
   kickResult: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
   kickScored: { color: '#1f7a4d' },
   kickMissed: { color: '#c0392b' },

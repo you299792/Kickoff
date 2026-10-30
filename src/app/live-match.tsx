@@ -22,6 +22,7 @@ import {
   type MatchGoal,
   type MatchPenaltyShootout,
   type MatchPeriod,
+  type MatchSubstitution,
   type MatchTeam,
 } from '@/data/matches';
 
@@ -75,20 +76,63 @@ function comparePlayersByPosition(a: MatchPlayerOption, b: MatchPlayerOption) {
   return aRank - bRank;
 }
 
-function getTeamPlayers(team: MatchTeam) {
+/** The lineup after applying every substitution made so far, in order. */
+function getEffectiveLineup(team: MatchTeam, substitutions: MatchSubstitution[]) {
+  const lineup = { ...team.lineup };
+  const teamSubs = substitutions
+    .filter((sub) => sub.teamId === team.id)
+    .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds);
+  for (const sub of teamSubs) {
+    const slotId = Object.entries(lineup).find(([, name]) => name === sub.playerOutName)?.[0];
+    if (slotId) lineup[slotId] = sub.playerInName;
+  }
+  return lineup;
+}
+
+function getSubbedOffNames(team: MatchTeam, substitutions: MatchSubstitution[]) {
+  return new Set(
+    substitutions.filter((sub) => sub.teamId === team.id).map((sub) => sub.playerOutName),
+  );
+}
+
+/** Players currently on the pitch for this team (starting XI minus subs off, plus subs on). */
+function getOnPitchPlayers(team: MatchTeam, substitutions: MatchSubstitution[]) {
   const roster = team.roster ?? [];
-  const assignedNames = Object.values(team.lineup);
-  const starters: MatchPlayerOption[] = assignedNames
+  const assignedNames = Object.values(getEffectiveLineup(team, substitutions));
+  return assignedNames
     .map((name) => roster.find((player) => player.name === name) ?? { name })
     .filter(
       (player, index, players) =>
         players.findIndex((item) => item.name === player.name) === index,
     )
     .sort(comparePlayersByPosition);
-  const reserves = roster
-    .filter((player) => !assignedNames.includes(player.name))
+}
+
+/** Bench players who haven't played yet and are eligible to be subbed on (no return once subbed off). */
+function getAvailableReserves(team: MatchTeam, substitutions: MatchSubstitution[]) {
+  const roster = team.roster ?? [];
+  const onPitchNames = new Set(getOnPitchPlayers(team, substitutions).map((player) => player.name));
+  const subbedOffNames = getSubbedOffNames(team, substitutions);
+  return roster
+    .filter((player) => !onPitchNames.has(player.name) && !subbedOffNames.has(player.name))
     .sort(comparePlayersByPosition);
-  return [...starters, ...reserves];
+}
+
+function getTeamPlayers(team: MatchTeam, substitutions: MatchSubstitution[] = []) {
+  return [...getOnPitchPlayers(team, substitutions), ...getAvailableReserves(team, substitutions)];
+}
+
+function getSubstitutionStats(team: MatchTeam, substitutions: MatchSubstitution[]) {
+  const teamSubs = substitutions.filter((sub) => sub.teamId === team.id);
+  const chargeable = teamSubs.filter((sub) => !sub.isConcussion);
+  const windowsUsed = new Set(
+    chargeable.filter((sub) => sub.windowNumber > 0).map((sub) => sub.windowNumber),
+  ).size;
+  return {
+    subsUsed: chargeable.length,
+    windowsUsed,
+    concussionSubsUsed: teamSubs.length - chargeable.length,
+  };
 }
 
 export default function LiveMatchScreen() {
@@ -109,6 +153,13 @@ export default function LiveMatchScreen() {
   const [selectedCardTeam, setSelectedCardTeam] = useState<MatchTeam | null>(null);
   const [selectedCardPlayer, setSelectedCardPlayer] = useState<string | null>(null);
   const [selectedPenaltyTaker, setSelectedPenaltyTaker] = useState<string | null>(null);
+  const [subModalVisible, setSubModalVisible] = useState(false);
+  const [subTeam, setSubTeam] = useState<MatchTeam | null>(null);
+  const [subPlayerOut, setSubPlayerOut] = useState<string | null>(null);
+  const [subIsConcussion, setSubIsConcussion] = useState(false);
+  const [pendingSubs, setPendingSubs] = useState<
+    { id: string; playerOutName: string; playerInName: string; isConcussion: boolean }[]
+  >([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -233,17 +284,18 @@ export default function LiveMatchScreen() {
                       : 'FIRST HALF'
                     : 'MATCH CLOCK';
   const selectedPlayers = useMemo(
-    () => (selectedScoringTeam ? getTeamPlayers(selectedScoringTeam) : []),
-    [selectedScoringTeam],
+    () =>
+      selectedScoringTeam ? getTeamPlayers(selectedScoringTeam, match?.substitutions ?? []) : [],
+    [selectedScoringTeam, match?.substitutions],
   );
   const assistOptions = useMemo(
     () =>
       pendingAssist
-        ? getTeamPlayers(pendingAssist.team).filter(
+        ? getTeamPlayers(pendingAssist.team, match?.substitutions ?? []).filter(
             (player) => player.name !== pendingAssist.scorerName,
           )
         : [],
-    [pendingAssist],
+    [pendingAssist, match?.substitutions],
   );
   const penaltyShootout = match?.penaltyShootout;
   const penaltyKicks = penaltyShootout?.kicks ?? [];
@@ -269,9 +321,36 @@ export default function LiveMatchScreen() {
           ? match.awayTeam
           : match.homeTeam
       : null;
-  const penaltyTakerOptions = currentPenaltyTeam ? getTeamPlayers(currentPenaltyTeam) : [];
+  const penaltyTakerOptions = currentPenaltyTeam
+    ? getTeamPlayers(currentPenaltyTeam, match?.substitutions ?? [])
+    : [];
   const activePenaltyTaker =
     selectedPenaltyTaker ?? penaltyTakerOptions[0]?.name ?? 'Taker not recorded';
+
+  const canManageSubstitutions =
+    Boolean(match) && match.status !== 'completed' && period !== 'penalty-shootout';
+  const hasReachedExtraTime =
+    match?.extraTimeHalfStartedAtSeconds !== null && match?.extraTimeHalfStartedAtSeconds !== undefined;
+  const maxSubstitutions = 5 + (hasReachedExtraTime ? 1 : 0);
+  const maxSubstitutionWindows = 3 + (hasReachedExtraTime ? 1 : 0);
+  const isFreeSubWindow = period === 'half-time' || period === 'extra-time-break';
+  const subStats = subTeam ? getSubstitutionStats(subTeam, match?.substitutions ?? []) : null;
+  const pendingNormalSubsCount = pendingSubs.filter((item) => !item.isConcussion).length;
+  const effectiveSubsUsed = (subStats?.subsUsed ?? 0) + pendingNormalSubsCount;
+  const canStartNewSubWindow =
+    isFreeSubWindow || (subStats?.windowsUsed ?? 0) < maxSubstitutionWindows;
+  const canAddNormalSub =
+    effectiveSubsUsed < maxSubstitutions && (canStartNewSubWindow || pendingNormalSubsCount > 0);
+  const subOnPitchOptions = subTeam
+    ? getOnPitchPlayers(subTeam, match?.substitutions ?? []).filter(
+        (player) => !pendingSubs.some((item) => item.playerOutName === player.name),
+      )
+    : [];
+  const subReserveOptions = subTeam
+    ? getAvailableReserves(subTeam, match?.substitutions ?? []).filter(
+        (player) => !pendingSubs.some((item) => item.playerInName === player.name),
+      )
+    : [];
 
   async function persistMatch(nextMatch: MatchFixture): Promise<boolean> {
     setBusy(true);
@@ -577,6 +656,60 @@ export default function LiveMatchScreen() {
     void persistMatch({ ...match, cards: match.cards.slice(0, -1) });
   }
 
+  function closeSubModal() {
+    setSubModalVisible(false);
+    setSubTeam(null);
+    setSubPlayerOut(null);
+    setSubIsConcussion(false);
+    setPendingSubs([]);
+  }
+
+  function addPendingSubstitution(playerInName: string) {
+    if (!subPlayerOut) return;
+    setPendingSubs((current) => [
+      ...current,
+      { id: createMatchId(), playerOutName: subPlayerOut, playerInName, isConcussion: subIsConcussion },
+    ]);
+    setSubPlayerOut(null);
+    setSubIsConcussion(false);
+  }
+
+  function removePendingSubstitution(id: string) {
+    setPendingSubs((current) => current.filter((item) => item.id !== id));
+  }
+
+  async function confirmSubstitutions() {
+    if (!match || !subTeam || pendingSubs.length === 0 || busy) return;
+    const nowElapsed = Math.floor(
+      match.elapsedSeconds +
+        (match.startedAt ? Math.max(0, getCurrentTimestamp() - match.startedAt) / 1000 : 0),
+    );
+    const stats = getSubstitutionStats(subTeam, match.substitutions ?? []);
+    const windowNumber = isFreeSubWindow ? 0 : stats.windowsUsed + 1;
+    const newSubs: MatchSubstitution[] = pendingSubs.map((pending) => ({
+      id: pending.id,
+      teamId: subTeam.id,
+      playerOutName: pending.playerOutName,
+      playerInName: pending.playerInName,
+      elapsedSeconds: nowElapsed,
+      period,
+      isConcussion: pending.isConcussion,
+      windowNumber: pending.isConcussion ? 0 : windowNumber,
+    }));
+    const saved = await persistMatch({
+      ...match,
+      substitutions: [...(match.substitutions ?? []), ...newSubs],
+    });
+    if (saved) closeSubModal();
+  }
+
+  function undoLastSubstitution() {
+    if (!match || busy || match.status === 'completed' || (match.substitutions ?? []).length === 0) {
+      return;
+    }
+    void persistMatch({ ...match, substitutions: (match.substitutions ?? []).slice(0, -1) });
+  }
+
   async function saveAndReturn() {
     if (!match || busy) return;
     const savedMatch = match.startedAt
@@ -713,23 +846,43 @@ export default function LiveMatchScreen() {
                     <ThemedText style={styles.goalButtonText}>＋  Log a goal</ThemedText>
                   </Pressable>
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Give a player a card"
-                  onPress={() => {
-                    setSelectedCardTeam(null);
-                    setSelectedCardPlayer(null);
-                    setCardModalVisible(true);
-                  }}
-                  disabled={busy || !isMatchEditable || match.status === 'completed'}
-                  style={({ pressed }) => [
-                    styles.cardButton,
-                    pressed && styles.pressed,
-                    (busy || !isMatchEditable || match.status === 'completed') &&
-                      styles.disabled,
-                  ]}>
-                  <ThemedText style={styles.cardButtonText}>▰  Record a card</ThemedText>
-                </Pressable>
+                <View style={styles.secondaryActionsRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Give a player a card"
+                    onPress={() => {
+                      setSelectedCardTeam(null);
+                      setSelectedCardPlayer(null);
+                      setCardModalVisible(true);
+                    }}
+                    disabled={busy || !isMatchEditable || match.status === 'completed'}
+                    style={({ pressed }) => [
+                      styles.cardButton,
+                      pressed && styles.pressed,
+                      (busy || !isMatchEditable || match.status === 'completed') &&
+                        styles.disabled,
+                    ]}>
+                    <ThemedText style={styles.cardButtonText}>▰  Record a card</ThemedText>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Make a substitution"
+                    onPress={() => {
+                      setSubTeam(null);
+                      setSubPlayerOut(null);
+                      setSubIsConcussion(false);
+                      setPendingSubs([]);
+                      setSubModalVisible(true);
+                    }}
+                    disabled={busy || !canManageSubstitutions}
+                    style={({ pressed }) => [
+                      styles.cardButton,
+                      pressed && styles.pressed,
+                      (busy || !canManageSubstitutions) && styles.disabled,
+                    ]}>
+                    <ThemedText style={styles.cardButtonText}>⇄  Substitution</ThemedText>
+                  </Pressable>
+                </View>
 
                 {period === 'regulation' && !isSecondHalf ? (
                   <Pressable
@@ -1320,6 +1473,69 @@ export default function LiveMatchScreen() {
                 </ThemedView>
               )}
 
+              <View style={styles.sectionHeader}>
+                <View>
+                  <ThemedText type="subtitle" style={styles.sectionTitle}>Substitutions</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {(match.substitutions ?? []).length}{' '}
+                    {(match.substitutions ?? []).length === 1 ? 'change' : 'changes'} made
+                  </ThemedText>
+                </View>
+                {(match.substitutions ?? []).length > 0 ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={undoLastSubstitution}
+                    disabled={busy || match.status === 'completed'}
+                    style={({ pressed }) => [
+                      styles.undoButton,
+                      pressed && styles.pressed,
+                      (busy || match.status === 'completed') && styles.disabled,
+                    ]}>
+                    <ThemedText style={styles.undoText}>Undo last</ThemedText>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {(match.substitutions ?? []).length > 0 ? (
+                <View style={styles.timeline}>
+                  {[...(match.substitutions ?? [])].reverse().map((sub) => {
+                    const team = sub.teamId === match.homeTeam.id ? match.homeTeam : match.awayTeam;
+                    return (
+                      <View key={sub.id} style={styles.cardRow}>
+                        <View style={styles.subIcon}>
+                          <ThemedText style={styles.subIconText}>⇄</ThemedText>
+                        </View>
+                        <View style={styles.goalInfo}>
+                          <ThemedText style={styles.scorerName}>
+                            {sub.playerInName} <ThemedText themeColor="textSecondary">for</ThemedText>{' '}
+                            {sub.playerOutName}
+                          </ThemedText>
+                          <ThemedText type="small" themeColor="textSecondary">
+                            {team.name}
+                            {sub.isConcussion ? ' · Concussion substitute' : ''}
+                          </ThemedText>
+                        </View>
+                        <ThemedText style={styles.cardTimestamp}>
+                          {formatGoalTime(
+                            sub.elapsedSeconds,
+                            match.firstHalfAdditionalMinutes,
+                            match.secondHalfAdditionalMinutes,
+                            halfLengthMinutes,
+                          )}
+                        </ThemedText>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <ThemedView type="backgroundElement" style={styles.emptyTimeline}>
+                  <ThemedText style={styles.emptyTitle}>No substitutions yet</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.emptyHint}>
+                    Make a substitution to track changes to the lineup.
+                  </ThemedText>
+                </ThemedView>
+              )}
+
               {match.notes ? (
                 <ThemedView type="backgroundElement" style={styles.notesCard}>
                   <ThemedText style={styles.notesTitle}>Match notes</ThemedText>
@@ -1608,8 +1824,8 @@ export default function LiveMatchScreen() {
                   style={styles.playerList}
                   contentContainerStyle={styles.playerListContent}
                   keyboardShouldPersistTaps="handled">
-                  {getTeamPlayers(selectedCardTeam).length > 0 ? (
-                    getTeamPlayers(selectedCardTeam).map((player, index) => (
+                  {getTeamPlayers(selectedCardTeam, match?.substitutions ?? []).length > 0 ? (
+                    getTeamPlayers(selectedCardTeam, match?.substitutions ?? []).map((player, index) => (
                       <Pressable
                         key={`${player.number ?? index}-${player.name}`}
                         accessibilityRole="button"
@@ -1685,6 +1901,239 @@ export default function LiveMatchScreen() {
                   setSelectedCardTeam(null);
                   setSelectedCardPlayer(null);
                 }}
+                style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
+                <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+              </Pressable>
+            </ThemedView>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={subModalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={closeSubModal}>
+          <View style={styles.modalBackdrop}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close substitution selector"
+              onPress={closeSubModal}
+              style={StyleSheet.absoluteFill}
+            />
+            <ThemedView type="backgroundElement" style={styles.goalModal}>
+              <View style={styles.modalHandle} />
+              <View style={styles.modalHeader}>
+                <View>
+                  <ThemedText type="subtitle" style={styles.modalTitle}>
+                    {subPlayerOut ? 'Player coming on' : subTeam ? 'Player going off' : 'Which team?'}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    {subPlayerOut
+                      ? `${subPlayerOut} · ${subTeam?.name}`
+                      : subTeam
+                        ? subTeam.name
+                        : `At ${formatClock(elapsedSeconds)} match time`}
+                  </ThemedText>
+                </View>
+                {subPlayerOut ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setSubPlayerOut(null)}
+                    style={styles.modalBack}>
+                    <ThemedText style={styles.modalBackText}>Back</ThemedText>
+                  </Pressable>
+                ) : subTeam && pendingSubs.length === 0 ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setSubTeam(null)}
+                    style={styles.modalBack}>
+                    <ThemedText style={styles.modalBackText}>Back</ThemedText>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {!subTeam ? (
+                <View style={styles.teamChoices}>
+                  {[match?.homeTeam, match?.awayTeam]
+                    .filter((team): team is MatchTeam => team !== undefined)
+                    .map((team) => (
+                      <Pressable
+                        key={team.id}
+                        accessibilityRole="button"
+                        onPress={() => setSubTeam(team)}
+                        style={({ pressed }) => [styles.teamChoice, pressed && styles.pressed]}>
+                        <View style={[styles.choiceBadge, { backgroundColor: team.color }]}>
+                          <ThemedText style={styles.badgeText}>
+                            {team.name.slice(0, 2).toUpperCase()}
+                          </ThemedText>
+                        </View>
+                        <ThemedText style={styles.choiceTeamName}>{team.name}</ThemedText>
+                        <ThemedText themeColor="textSecondary" style={styles.choiceArrow}>›</ThemedText>
+                      </Pressable>
+                    ))}
+                </View>
+              ) : (
+                <>
+                  <View style={styles.subUsageBanner}>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.subUsageText}>
+                      Subs {effectiveSubsUsed}/{maxSubstitutions} · Windows{' '}
+                      {subStats?.windowsUsed ?? 0}/{maxSubstitutionWindows}
+                      {isFreeSubWindow ? ' · Free window (break)' : ''}
+                    </ThemedText>
+                    {!canAddNormalSub ? (
+                      <ThemedText type="small" style={styles.subLimitText}>
+                        Limit reached — only concussion substitutes can be added.
+                      </ThemedText>
+                    ) : null}
+                  </View>
+
+                  {pendingSubs.length > 0 ? (
+                    <View style={styles.subPendingList}>
+                      {pendingSubs.map((pending) => (
+                        <View key={pending.id} style={styles.subPendingRow}>
+                          <ThemedText style={styles.subPendingText} numberOfLines={1}>
+                            {pending.playerInName} for {pending.playerOutName}
+                            {pending.isConcussion ? ' (concussion)' : ''}
+                          </ThemedText>
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Remove pending substitution of ${pending.playerInName} for ${pending.playerOutName}`}
+                            onPress={() => removePendingSubstitution(pending.id)}
+                            hitSlop={8}
+                            style={({ pressed }) => [pressed && styles.pressed]}>
+                            <ThemedText style={styles.subPendingRemove}>×</ThemedText>
+                          </Pressable>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {!subPlayerOut ? (
+                    <ScrollView
+                      style={styles.playerList}
+                      contentContainerStyle={styles.playerListContent}
+                      keyboardShouldPersistTaps="handled">
+                      {subOnPitchOptions.length > 0 ? (
+                        subOnPitchOptions.map((player, index) => (
+                          <Pressable
+                            key={`${player.number ?? index}-${player.name}`}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${player.name} going off`}
+                            onPress={() => {
+                              setSubPlayerOut(player.name);
+                              if (!canAddNormalSub) setSubIsConcussion(true);
+                            }}
+                            style={({ pressed }) => [styles.playerChoice, pressed && styles.pressed]}>
+                            <View
+                              style={[styles.playerNumber, { backgroundColor: subTeam.color }]}>
+                              <ThemedText style={styles.playerNumberText}>
+                                {player.number ?? index + 1}
+                              </ThemedText>
+                            </View>
+                            <View style={styles.playerInfo}>
+                              <ThemedText style={styles.playerName}>{player.name}</ThemedText>
+                              <ThemedText type="small" themeColor="textSecondary">
+                                {player.position ?? 'On pitch'}
+                              </ThemedText>
+                            </View>
+                            <ThemedText style={styles.choiceArrow}>›</ThemedText>
+                          </Pressable>
+                        ))
+                      ) : (
+                        <ThemedText themeColor="textSecondary" style={styles.noPlayers}>
+                          No players available to substitute off.
+                        </ThemedText>
+                      )}
+                    </ScrollView>
+                  ) : (
+                    <>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: subIsConcussion, disabled: !canAddNormalSub }}
+                        accessibilityLabel="Mark as a concussion substitute"
+                        disabled={!canAddNormalSub}
+                        onPress={() => setSubIsConcussion((current) => !current)}
+                        style={({ pressed }) => [
+                          styles.subConcussionToggle,
+                          subIsConcussion && styles.subConcussionToggleActive,
+                          pressed && styles.pressed,
+                          !canAddNormalSub && styles.disabled,
+                        ]}>
+                        <View
+                          style={[
+                            styles.subConcussionCheckbox,
+                            subIsConcussion && styles.subConcussionCheckboxActive,
+                          ]}>
+                          {subIsConcussion ? (
+                            <ThemedText style={styles.subConcussionCheckmark}>✓</ThemedText>
+                          ) : null}
+                        </View>
+                        <ThemedText style={styles.subConcussionToggleText}>
+                          {canAddNormalSub
+                            ? "Concussion substitute (doesn't count toward limits)"
+                            : 'Concussion substitute (required — limit reached)'}
+                        </ThemedText>
+                      </Pressable>
+                      <ScrollView
+                        style={styles.playerList}
+                        contentContainerStyle={styles.playerListContent}
+                        keyboardShouldPersistTaps="handled">
+                        {subReserveOptions.length > 0 ? (
+                          subReserveOptions.map((player, index) => (
+                            <Pressable
+                              key={`${player.number ?? index}-${player.name}`}
+                              accessibilityRole="button"
+                              accessibilityLabel={`${player.name} coming on`}
+                              onPress={() => addPendingSubstitution(player.name)}
+                              style={({ pressed }) => [
+                                styles.playerChoice,
+                                pressed && styles.pressed,
+                              ]}>
+                              <View
+                                style={[styles.playerNumber, { backgroundColor: subTeam.color }]}>
+                                <ThemedText style={styles.playerNumberText}>
+                                  {player.number ?? index + 1}
+                                </ThemedText>
+                              </View>
+                              <View style={styles.playerInfo}>
+                                <ThemedText style={styles.playerName}>{player.name}</ThemedText>
+                                <ThemedText type="small" themeColor="textSecondary">
+                                  {player.position ?? 'Reserve'}
+                                </ThemedText>
+                              </View>
+                              <ThemedText style={styles.addGoalMark}>＋</ThemedText>
+                            </Pressable>
+                          ))
+                        ) : (
+                          <ThemedText themeColor="textSecondary" style={styles.noPlayers}>
+                            No reserves available to come on.
+                          </ThemedText>
+                        )}
+                      </ScrollView>
+                    </>
+                  )}
+
+                  {pendingSubs.length > 0 && !subPlayerOut ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Confirm ${pendingSubs.length} substitution${pendingSubs.length === 1 ? '' : 's'}`}
+                      disabled={busy}
+                      onPress={() => void confirmSubstitutions()}
+                      style={({ pressed }) => [
+                        styles.subConfirmButton,
+                        pressed && styles.pressed,
+                        busy && styles.disabled,
+                      ]}>
+                      <ThemedText style={styles.subConfirmButtonText}>
+                        Confirm {pendingSubs.length} substitution{pendingSubs.length === 1 ? '' : 's'}
+                      </ThemedText>
+                    </Pressable>
+                  ) : null}
+                </>
+              )}
+              <Pressable
+                accessibilityRole="button"
+                onPress={closeSubModal}
                 style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
                 <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
               </Pressable>
@@ -1848,11 +2297,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#1f7a4d',
   },
   goalButtonText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  secondaryActionsRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    marginTop: Spacing.two,
+  },
   cardButton: {
+    flex: 1,
     minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: Spacing.two,
+    paddingHorizontal: Spacing.one,
     borderRadius: Spacing.two,
     backgroundColor: 'rgba(128, 128, 128, 0.08)',
   },
@@ -2059,6 +2514,15 @@ const styles = StyleSheet.create({
   },
   yellowCard: { backgroundColor: '#f5c542' },
   redCard: { backgroundColor: '#dc3d3d' },
+  subIcon: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: 'rgba(47, 111, 181, 0.14)',
+  },
+  subIconText: { color: '#2f6fb5', fontSize: 15, fontWeight: '800' },
   cardTimestamp: {
     color: '#8f98a3',
     fontSize: 13,
@@ -2240,6 +2704,64 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(128, 128, 128, 0.10)',
   },
   cancelButtonText: { fontSize: 14, fontWeight: '700' },
+  subUsageBanner: {
+    gap: 2,
+    marginBottom: Spacing.two,
+    padding: Spacing.two,
+    borderRadius: Spacing.two,
+    backgroundColor: 'rgba(128, 128, 128, 0.08)',
+  },
+  subUsageText: { fontWeight: '700' },
+  subLimitText: { color: '#c0392b', fontWeight: '600' },
+  subPendingList: { gap: Spacing.one, marginBottom: Spacing.two },
+  subPendingRow: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Spacing.two,
+    backgroundColor: 'rgba(47, 111, 181, 0.10)',
+  },
+  subPendingText: { flex: 1, fontSize: 13, fontWeight: '700' },
+  subPendingRemove: { color: '#c0392b', fontSize: 20, lineHeight: 22, fontWeight: '600' },
+  subConcussionToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 46,
+    marginBottom: Spacing.two,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+  },
+  subConcussionToggleActive: {
+    borderColor: '#2f6fb5',
+    backgroundColor: 'rgba(47, 111, 181, 0.10)',
+  },
+  subConcussionCheckbox: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#8f98a3',
+  },
+  subConcussionCheckboxActive: { borderColor: '#2f6fb5', backgroundColor: '#2f6fb5' },
+  subConcussionCheckmark: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  subConcussionToggleText: { flex: 1, fontSize: 13, fontWeight: '600' },
+  subConfirmButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: Spacing.two,
+    borderRadius: Spacing.two,
+    backgroundColor: '#2f6fb5',
+  },
+  subConfirmButtonText: { color: '#fff', fontSize: 14, fontWeight: '800' },
   disabled: { opacity: 0.55 },
   pressed: { opacity: 0.65 },
 });

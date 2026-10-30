@@ -244,6 +244,7 @@ export default function NewMatchScreen() {
       startedAt: status === 'in-progress' ? getCurrentTimestamp() : null,
       goals: [],
       cards: [],
+      substitutions: [],
       firstHalfAdditionalMinutes: 0,
       secondHalfAdditionalMinutes: 0,
       halfLengthMinutes,

@@ -48,6 +48,18 @@ export type MatchPeriod =
   | 'penalty-shootout'
   | 'completed';
 
+export type MatchSubstitution = {
+  id: string;
+  teamId: string;
+  playerOutName: string;
+  playerInName: string;
+  elapsedSeconds: number;
+  period: MatchPeriod;
+  isConcussion: boolean;
+  /** 0 = a free window (made at half-time/extra-time break, doesn't count toward the window limit). */
+  windowNumber: number;
+};
+
 export type MatchFixture = {
   id: string;
   homeTeam: MatchTeam;
@@ -64,6 +76,7 @@ export type MatchFixture = {
   startedAt: number | null;
   goals: MatchGoal[];
   cards: MatchCard[];
+  substitutions?: MatchSubstitution[];
   firstHalfAdditionalMinutes: number;
   secondHalfAdditionalMinutes: number;
   halfLengthMinutes?: number;
@@ -151,6 +164,23 @@ function isMatchPeriod(value: unknown): value is MatchPeriod {
   ].includes(String(value));
 }
 
+function isMatchSubstitution(value: unknown): value is MatchSubstitution {
+  if (typeof value !== 'object' || value === null) return false;
+  const sub = value as Record<string, unknown>;
+  return (
+    typeof sub.id === 'string' &&
+    typeof sub.teamId === 'string' &&
+    typeof sub.playerOutName === 'string' &&
+    typeof sub.playerInName === 'string' &&
+    typeof sub.elapsedSeconds === 'number' &&
+    sub.elapsedSeconds >= 0 &&
+    isMatchPeriod(sub.period) &&
+    typeof sub.isConcussion === 'boolean' &&
+    typeof sub.windowNumber === 'number' &&
+    sub.windowNumber >= 0
+  );
+}
+
 function isMatchPenaltyShootout(
   value: unknown,
   homeTeam: MatchTeam,
@@ -202,6 +232,8 @@ function isMatchFixture(value: unknown): value is MatchFixture {
       (Array.isArray(match.goals) && match.goals.every(isMatchGoal))) &&
     (match.cards === undefined ||
       (Array.isArray(match.cards) && match.cards.every(isMatchCard))) &&
+    (match.substitutions === undefined ||
+      (Array.isArray(match.substitutions) && match.substitutions.every(isMatchSubstitution))) &&
     (match.firstHalfAdditionalMinutes === undefined ||
       (typeof match.firstHalfAdditionalMinutes === 'number' &&
         match.firstHalfAdditionalMinutes >= 0)) &&
@@ -240,6 +272,7 @@ function normalizeMatchFixture(match: MatchFixture): MatchFixture {
     ...match,
     goals: match.goals ?? [],
     cards: match.cards ?? [],
+    substitutions: match.substitutions ?? [],
     firstHalfAdditionalMinutes: match.firstHalfAdditionalMinutes ?? 0,
     secondHalfAdditionalMinutes: match.secondHalfAdditionalMinutes ?? 0,
     halfLengthMinutes: match.halfLengthMinutes ?? 45,
