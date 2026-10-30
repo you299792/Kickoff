@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -87,42 +87,38 @@ export default function TeamsScreen() {
   const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const loadTeamsAndMatches = useCallback(async () => {
+    try {
+      const savedTeams = await getCreatedTeams();
+      setCreatedTeams(savedTeams);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to load saved teams.');
+    }
+
+    try {
+      const matches = await getMatchFixtures();
+      setCompletedMatches(matches.filter((match) => match.status === 'completed'));
+    } catch {
+      // Win/loss records are a bonus on top of the squad list, so a match-data
+      // failure here shouldn't block the teams screen from rendering.
+      setCompletedMatches([]);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      let isActive = true;
-
-      async function loadTeamsAndMatches() {
-        try {
-          const savedTeams = await getCreatedTeams();
-          if (isActive) {
-            setCreatedTeams(savedTeams);
-            setLoadError(null);
-          }
-        } catch (error) {
-          if (isActive) {
-            setLoadError(error instanceof Error ? error.message : 'Unable to load saved teams.');
-          }
-        }
-
-        try {
-          const matches = await getMatchFixtures();
-          if (isActive) {
-            setCompletedMatches(matches.filter((match) => match.status === 'completed'));
-          }
-        } catch {
-          // Win/loss records are a bonus on top of the squad list, so a match-data
-          // failure here shouldn't block the teams screen from rendering.
-          if (isActive) setCompletedMatches([]);
-        }
-      }
-
       void loadTeamsAndMatches();
-      return () => {
-        isActive = false;
-      };
-    }, []),
+    }, [loadTeamsAndMatches]),
   );
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    await loadTeamsAndMatches();
+    setIsRefreshing(false);
+  }
 
   const teamStatsById = useMemo(() => {
     const statsById = new Map<string, { wins: number; draws: number; losses: number; form: Form[] }>();
@@ -196,7 +192,17 @@ export default function TeamsScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => void handleRefresh()}
+              tintColor={colors.textSecondary}
+              colors={[colors.text]}
+            />
+          }>
           <View style={styles.header}>
             <View>
               <ThemedText type="title" style={styles.title}>

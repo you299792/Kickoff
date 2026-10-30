@@ -1,11 +1,12 @@
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import {
   getMatchFixtures,
   softDeleteMatchFixture,
@@ -76,37 +77,38 @@ function teamInitials(name: string) {
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const colors = useTheme();
   const [filter, setFilter] = useState<FilterKey>('all');
   const [savedMatches, setSavedMatches] = useState<MatchFixture[]>([]);
   const [fixturesError, setFixturesError] = useState('');
   const [deletingMatchId, setDeletingMatchId] = useState<string | null>(null);
   const [matchActionsTarget, setMatchActionsTarget] = useState<MatchFixture | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const longPressedMatchId = useRef<string | null>(null);
+
+  const loadMatches = useCallback(async () => {
+    setFixturesError('');
+    try {
+      const matches = await getMatchFixtures();
+      setSavedMatches(matches);
+    } catch (loadError) {
+      setFixturesError(
+        loadError instanceof Error ? loadError.message : 'Unable to load saved fixtures.',
+      );
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      let isActive = true;
-      async function loadMatches() {
-        setFixturesError('');
-        try {
-          const matches = await getMatchFixtures();
-          if (isActive) {
-            setSavedMatches(matches);
-          }
-        } catch (loadError) {
-          if (isActive) {
-            setFixturesError(
-              loadError instanceof Error ? loadError.message : 'Unable to load saved fixtures.',
-            );
-          }
-        }
-      }
       void loadMatches();
-      return () => {
-        isActive = false;
-      };
-    }, []),
+    }, [loadMatches]),
   );
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    await loadMatches();
+    setIsRefreshing(false);
+  }
 
   const upcomingMatches = useMemo(
     () => savedMatches.filter((match) => match.status !== 'completed'),
@@ -228,7 +230,17 @@ export default function HomeScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={() => void handleRefresh()}
+              tintColor={colors.textSecondary}
+              colors={[colors.text]}
+            />
+          }>
           <View style={styles.header}>
             <ThemedText type="title" style={styles.title}>
               Kickoff
