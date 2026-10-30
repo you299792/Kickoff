@@ -1,16 +1,61 @@
 import { Image } from 'expo-image';
 import * as SplashScreen from 'expo-splash-screen';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Dimensions, StyleSheet, View } from 'react-native';
-import Animated, { Easing, Keyframe } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  Keyframe,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
 const INITIAL_SCALE_FACTOR = Dimensions.get('screen').height / 90;
 const DURATION = 600;
+/** How long the loading bar stays on screen before the exit animation starts. */
+const LOADING_HOLD_MS = 1700;
+const LOADING_BAR_WIDTH = 120;
+const LOADING_BAR_INDICATOR_WIDTH = 44;
+
+function LoadingBar() {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = withRepeat(
+      withTiming(1, { duration: 850, easing: Easing.inOut(Easing.ease) }),
+      -1,
+      true,
+    );
+  }, [progress]);
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: progress.value * (LOADING_BAR_WIDTH - LOADING_BAR_INDICATOR_WIDTH) },
+    ],
+  }));
+
+  return (
+    <View
+      style={styles.loadingBarTrack}
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading">
+      <Animated.View style={[styles.loadingBarIndicator, indicatorStyle]} />
+    </View>
+  );
+}
 
 export function AnimatedSplashOverlay() {
+  const [loaded, setLoaded] = useState(false);
   const [animate, setAnimate] = useState(false);
   const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    if (!loaded) return;
+    const timeout = setTimeout(() => setAnimate(true), LOADING_HOLD_MS);
+    return () => clearTimeout(timeout);
+  }, [loaded]);
 
   if (!visible) return null;
 
@@ -33,7 +78,12 @@ export function AnimatedSplashOverlay() {
     },
   });
 
-  const image = <Image style={styles.image} source={require('@/assets/images/kickoff-logo.png')} />;
+  const content = (
+    <>
+      <Image style={styles.image} source={require('@/assets/images/kickoff-logo.png')} />
+      <LoadingBar />
+    </>
+  );
 
   return animate ? (
     <Animated.View
@@ -44,17 +94,17 @@ export function AnimatedSplashOverlay() {
         }
       })}
       style={styles.splashOverlay}>
-      {image}
+      {content}
     </Animated.View>
   ) : (
     <View
       onLayout={() => {
         SplashScreen.hideAsync().finally(() => {
-          setAnimate(true);
+          setLoaded(true);
         });
       }}
       style={styles.splashOverlay}>
-      {image}
+      {content}
     </View>
   );
 }
@@ -131,6 +181,20 @@ const styles = StyleSheet.create({
     width: 110,
     height: 100,
   },
+  loadingBarTrack: {
+    width: LOADING_BAR_WIDTH,
+    height: 4,
+    marginTop: 28,
+    borderRadius: 2,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+  },
+  loadingBarIndicator: {
+    width: LOADING_BAR_INDICATOR_WIDTH,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#ffffff',
+  },
   background: {
     borderRadius: 40,
     experimental_backgroundImage: `linear-gradient(180deg, #3C9FFE, #0274DF)`,
@@ -140,7 +204,7 @@ const styles = StyleSheet.create({
   },
   splashOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#302b28',
+    backgroundColor: '#11100f',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1000,
