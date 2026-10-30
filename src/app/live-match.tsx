@@ -25,6 +25,7 @@ import {
   type MatchSubstitution,
   type MatchTeam,
 } from '@/data/matches';
+import { getPlayerMinutes } from '@/utils/player-minutes';
 
 const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
 
@@ -160,6 +161,7 @@ export default function LiveMatchScreen() {
   const [pendingSubs, setPendingSubs] = useState<
     { id: string; playerOutName: string; playerInName: string; isConcussion: boolean }[]
   >([]);
+  const [showPlayerMinutes, setShowPlayerMinutes] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -351,6 +353,20 @@ export default function LiveMatchScreen() {
         (player) => !pendingSubs.some((item) => item.playerInName === player.name),
       )
     : [];
+  const homePlayerMinutes = useMemo(
+    () =>
+      match
+        ? getPlayerMinutes(match.homeTeam, match.substitutions ?? [], elapsedSeconds)
+        : [],
+    [match, elapsedSeconds],
+  );
+  const awayPlayerMinutes = useMemo(
+    () =>
+      match
+        ? getPlayerMinutes(match.awayTeam, match.substitutions ?? [], elapsedSeconds)
+        : [],
+    [match, elapsedSeconds],
+  );
 
   async function persistMatch(nextMatch: MatchFixture): Promise<boolean> {
     setBusy(true);
@@ -1536,6 +1552,69 @@ export default function LiveMatchScreen() {
                 </ThemedView>
               )}
 
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: showPlayerMinutes }}
+                accessibilityLabel={`Player minutes, ${showPlayerMinutes ? 'expanded' : 'collapsed'}`}
+                onPress={() => setShowPlayerMinutes((current) => !current)}
+                style={({ pressed }) => [styles.sectionHeader, pressed && styles.pressed]}>
+                <View>
+                  <ThemedText type="subtitle" style={styles.sectionTitle}>Player minutes</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary">
+                    Time on the pitch for every squad player
+                  </ThemedText>
+                </View>
+                <ThemedText themeColor="textSecondary" style={styles.minutesChevron}>
+                  {showPlayerMinutes ? '⌃' : '⌄'}
+                </ThemedText>
+              </Pressable>
+
+              {showPlayerMinutes ? (
+                <View style={styles.minutesSection}>
+                  {[
+                    { team: match.homeTeam, entries: homePlayerMinutes },
+                    { team: match.awayTeam, entries: awayPlayerMinutes },
+                  ].map(({ team, entries }) => (
+                    <View key={team.id} style={styles.minutesTeamGroup}>
+                      <View style={styles.minutesTeamHeader}>
+                        <View style={[styles.minutesTeamDot, { backgroundColor: team.color }]} />
+                        <ThemedText style={styles.minutesTeamName}>{team.name}</ThemedText>
+                      </View>
+                      <View style={styles.timeline}>
+                        {entries.map((entry) => (
+                          <View key={entry.name} style={styles.minutesRow}>
+                            <View style={styles.minutesNumber}>
+                              <ThemedText style={styles.minutesNumberText}>
+                                {entry.number ?? '-'}
+                              </ThemedText>
+                            </View>
+                            <View style={styles.goalInfo}>
+                              <ThemedText style={styles.scorerName} numberOfLines={1}>
+                                {entry.name}
+                              </ThemedText>
+                              <ThemedText type="small" themeColor="textSecondary">
+                                {entry.enteredAtSeconds === null
+                                  ? 'Did not play'
+                                  : entry.exitedAtSeconds !== null
+                                    ? entry.started
+                                      ? 'Started · Subbed off'
+                                      : 'Substitute · Subbed off'
+                                    : entry.started
+                                      ? 'Started · On pitch'
+                                      : 'Substitute · On pitch'}
+                              </ThemedText>
+                            </View>
+                            <ThemedText style={styles.minutesValue}>
+                              {entry.minutesPlayed}&apos;
+                            </ThemedText>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
               {match.notes ? (
                 <ThemedView type="backgroundElement" style={styles.notesCard}>
                   <ThemedText style={styles.notesTitle}>Match notes</ThemedText>
@@ -2548,6 +2627,37 @@ const styles = StyleSheet.create({
   emptyBallText: { fontSize: 20 },
   emptyTitle: { marginTop: Spacing.two, fontSize: 15, fontWeight: '700' },
   emptyHint: { marginTop: Spacing.one, textAlign: 'center', lineHeight: 18 },
+  minutesChevron: { fontSize: 20, lineHeight: 24 },
+  minutesSection: { gap: Spacing.three },
+  minutesTeamGroup: { gap: Spacing.two },
+  minutesTeamHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  minutesTeamDot: { width: 10, height: 10, borderRadius: 5 },
+  minutesTeamName: { fontSize: 14, fontWeight: '800' },
+  minutesRow: {
+    minHeight: 58,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: HAIRLINE,
+  },
+  minutesNumber: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: 'rgba(128, 128, 128, 0.14)',
+  },
+  minutesNumberText: { fontSize: 12, fontWeight: '800' },
+  minutesValue: {
+    color: '#1f7a4d',
+    fontSize: 15,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
   notesCard: {
     gap: Spacing.one,
     marginTop: Spacing.three,

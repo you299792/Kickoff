@@ -8,6 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { getMatchFixture, softDeleteMatchFixture, type MatchFixture } from '@/data/matches';
 import { useTheme } from '@/hooks/use-theme';
+import { getPlayerMinutes } from '@/utils/player-minutes';
 
 const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
 
@@ -96,6 +97,7 @@ export default function MatchDetailsScreen() {
     goals: true,
     discipline: true,
     substitutions: true,
+    minutes: true,
     penalties: true,
     notes: true,
   });
@@ -157,6 +159,12 @@ export default function MatchDetailsScreen() {
     (penaltyWinnerId === match.awayTeam.id ||
       (!penaltyWinnerId && match.awayGoals > match.homeGoals));
   const isDraw = match !== null && !homeWon && !awayWon;
+  const homePlayerMinutes = match
+    ? getPlayerMinutes(match.homeTeam, match.substitutions ?? [], match.elapsedSeconds)
+    : [];
+  const awayPlayerMinutes = match
+    ? getPlayerMinutes(match.awayTeam, match.substitutions ?? [], match.elapsedSeconds)
+    : [];
 
   async function deleteMatch() {
     if (!match || isDeleting) return;
@@ -412,6 +420,51 @@ export default function MatchDetailsScreen() {
                 )}
               </Section>
 
+              <Section
+                title="Player minutes"
+                expanded={expandedSections.minutes}
+                onToggle={() => toggleSection('minutes')}>
+                <View style={styles.minutesSection}>
+                  {[
+                    { team: match.homeTeam, entries: homePlayerMinutes },
+                    { team: match.awayTeam, entries: awayPlayerMinutes },
+                  ].map(({ team, entries }) => (
+                    <View key={team.id} style={styles.minutesTeamGroup}>
+                      <View style={styles.minutesTeamHeader}>
+                        <View style={[styles.minutesTeamDot, { backgroundColor: team.color }]} />
+                        <ThemedText style={styles.minutesTeamName}>{team.name}</ThemedText>
+                      </View>
+                      <View style={styles.eventList}>
+                        {entries.map((entry) => (
+                          <View key={entry.name} style={styles.eventRow}>
+                            <View style={styles.minutesNumber}>
+                              <ThemedText style={styles.minutesNumberText}>
+                                {entry.number ?? '-'}
+                              </ThemedText>
+                            </View>
+                            <View style={styles.eventInfo}>
+                              <ThemedText style={styles.eventTitle} numberOfLines={1}>
+                                {entry.name}
+                              </ThemedText>
+                              <ThemedText type="small" themeColor="textSecondary">
+                                {entry.enteredAtSeconds === null
+                                  ? 'Did not play'
+                                  : entry.started
+                                    ? 'Started'
+                                    : 'Substitute'}
+                              </ThemedText>
+                            </View>
+                            <ThemedText style={styles.minutesValue}>
+                              {entry.minutesPlayed}&apos;
+                            </ThemedText>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </Section>
+
               {match.penaltyShootout ? (
                 <Section
                   title="Penalty shootout"
@@ -620,6 +673,26 @@ const styles = StyleSheet.create({
   goalMark: { color: '#1f7a4d', fontSize: 10, fontWeight: '800', letterSpacing: 0.6 },
   cardMark: { width: 12, height: 18, borderRadius: 2 },
   subMark: { color: '#2f6fb5', fontSize: 16, fontWeight: '800' },
+  minutesSection: { gap: Spacing.three },
+  minutesTeamGroup: { gap: Spacing.two },
+  minutesTeamHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  minutesTeamDot: { width: 10, height: 10, borderRadius: 5 },
+  minutesTeamName: { fontSize: 14, fontWeight: '800' },
+  minutesNumber: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: 'rgba(128, 128, 128, 0.14)',
+  },
+  minutesNumberText: { fontSize: 12, fontWeight: '800' },
+  minutesValue: {
+    color: '#1f7a4d',
+    fontSize: 14,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
   kickResult: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   kickScored: { color: '#1f7a4d' },
   kickMissed: { color: '#c0392b' },
