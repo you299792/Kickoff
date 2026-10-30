@@ -866,12 +866,11 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={toggleTimer}
-                    disabled={busy || !isMatchEditable || match.status === 'completed'}
+                    disabled={!isMatchEditable || match.status === 'completed'}
                     style={({ pressed }) => [
                       styles.timerButton,
                       pressed && styles.pressed,
-                      (busy || !isMatchEditable || match.status === 'completed') &&
-                        styles.disabled,
+                      (!isMatchEditable || match.status === 'completed') && styles.disabled,
                     ]}>
                     <ThemedText style={styles.timerButtonText}>
                       {match.startedAt
@@ -888,12 +887,11 @@ export default function LiveMatchScreen() {
                       setSelectedScoringTeam(null);
                       setGoalModalVisible(true);
                     }}
-                    disabled={busy || !isMatchEditable || match.status === 'completed'}
+                    disabled={!isMatchEditable || match.status === 'completed'}
                     style={({ pressed }) => [
                       styles.goalButton,
                       pressed && styles.pressed,
-                      (busy || !isMatchEditable || match.status === 'completed') &&
-                        styles.disabled,
+                      (!isMatchEditable || match.status === 'completed') && styles.disabled,
                     ]}>
                     <ThemedText style={styles.goalButtonText}>＋  Log a goal</ThemedText>
                   </Pressable>
@@ -907,12 +905,11 @@ export default function LiveMatchScreen() {
                       setSelectedCardPlayer(null);
                       setCardModalVisible(true);
                     }}
-                    disabled={busy || !isMatchEditable || match.status === 'completed'}
+                    disabled={!isMatchEditable || match.status === 'completed'}
                     style={({ pressed }) => [
                       styles.cardButton,
                       pressed && styles.pressed,
-                      (busy || !isMatchEditable || match.status === 'completed') &&
-                        styles.disabled,
+                      (!isMatchEditable || match.status === 'completed') && styles.disabled,
                     ]}>
                     <ThemedText style={styles.cardButtonText}>▰  Record a card</ThemedText>
                   </Pressable>
@@ -926,11 +923,11 @@ export default function LiveMatchScreen() {
                       setPendingSubs([]);
                       setSubModalVisible(true);
                     }}
-                    disabled={busy || !canManageSubstitutions}
+                    disabled={!canManageSubstitutions}
                     style={({ pressed }) => [
                       styles.cardButton,
                       pressed && styles.pressed,
-                      (busy || !canManageSubstitutions) && styles.disabled,
+                      !canManageSubstitutions && styles.disabled,
                     ]}>
                     <ThemedText style={styles.cardButtonText}>⇄  Substitution</ThemedText>
                   </Pressable>
@@ -1411,11 +1408,11 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={undoLastGoal}
-                    disabled={busy || !isMatchEditable}
+                    disabled={!isMatchEditable}
                     style={({ pressed }) => [
                       styles.undoButton,
                       pressed && styles.pressed,
-                      (!isMatchEditable || busy) && styles.disabled,
+                      !isMatchEditable && styles.disabled,
                     ]}>
                     <ThemedText style={styles.undoText}>Undo last</ThemedText>
                   </Pressable>
@@ -1474,11 +1471,11 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={undoLastCard}
-                    disabled={busy || !isMatchEditable}
+                    disabled={!isMatchEditable}
                     style={({ pressed }) => [
                       styles.undoButton,
                       pressed && styles.pressed,
-                      (!isMatchEditable || busy) && styles.disabled,
+                      !isMatchEditable && styles.disabled,
                     ]}>
                     <ThemedText style={styles.undoText}>Undo last</ThemedText>
                   </Pressable>
@@ -1537,11 +1534,11 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={undoLastSubstitution}
-                    disabled={busy || match.status === 'completed'}
+                    disabled={match.status === 'completed'}
                     style={({ pressed }) => [
                       styles.undoButton,
                       pressed && styles.pressed,
-                      (busy || match.status === 'completed') && styles.disabled,
+                      match.status === 'completed' && styles.disabled,
                     ]}>
                     <ThemedText style={styles.undoText}>Undo last</ThemedText>
                   </Pressable>
