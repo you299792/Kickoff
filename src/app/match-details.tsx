@@ -8,7 +8,7 @@ import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { getMatchFixture, softDeleteMatchFixture, type MatchFixture } from '@/data/matches';
 import { useTheme } from '@/hooks/use-theme';
-import { getPlayerMinutes } from '@/utils/player-minutes';
+import { getCardLabel, getPlayerMinutes } from '@/utils/player-minutes';
 
 const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
 
@@ -160,10 +160,10 @@ export default function MatchDetailsScreen() {
       (!penaltyWinnerId && match.awayGoals > match.homeGoals));
   const isDraw = match !== null && !homeWon && !awayWon;
   const homePlayerMinutes = match
-    ? getPlayerMinutes(match.homeTeam, match.substitutions ?? [], match.elapsedSeconds)
+    ? getPlayerMinutes(match.homeTeam, match.substitutions ?? [], match.cards, match.elapsedSeconds)
     : [];
   const awayPlayerMinutes = match
-    ? getPlayerMinutes(match.awayTeam, match.substitutions ?? [], match.elapsedSeconds)
+    ? getPlayerMinutes(match.awayTeam, match.substitutions ?? [], match.cards, match.elapsedSeconds)
     : [];
 
   async function deleteMatch() {
@@ -362,7 +362,7 @@ export default function MatchDetailsScreen() {
                             <View style={styles.eventInfo}>
                               <ThemedText style={styles.eventTitle}>{card.playerName}</ThemedText>
                               <ThemedText type="small" themeColor="textSecondary">
-                                {team.name} · {card.type === 'yellow' ? 'Yellow card' : 'Red card'}
+                                {team.name} · {getCardLabel(card, match.cards)}
                               </ThemedText>
                             </View>
                             <View style={[styles.cardMark, { backgroundColor: cardColor }]} />
@@ -446,12 +446,19 @@ export default function MatchDetailsScreen() {
                               <ThemedText style={styles.eventTitle} numberOfLines={1}>
                                 {entry.name}
                               </ThemedText>
-                              <ThemedText type="small" themeColor="textSecondary">
+                              <ThemedText
+                                type="small"
+                                themeColor={entry.sentOffAtSeconds !== null ? undefined : 'textSecondary'}
+                                style={entry.sentOffAtSeconds !== null && styles.sentOffText}>
                                 {entry.enteredAtSeconds === null
                                   ? 'Did not play'
-                                  : entry.started
-                                    ? 'Started'
-                                    : 'Substitute'}
+                                  : entry.sentOffAtSeconds !== null
+                                    ? entry.started
+                                      ? 'Started · Sent off'
+                                      : 'Substitute · Sent off'
+                                    : entry.started
+                                      ? 'Started'
+                                      : 'Substitute'}
                               </ThemedText>
                             </View>
                             <ThemedText style={styles.minutesValue}>
@@ -693,6 +700,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
+  sentOffText: { color: '#dc3d3d', fontWeight: '700' },
   kickResult: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
   kickScored: { color: '#1f7a4d' },
   kickMissed: { color: '#c0392b' },

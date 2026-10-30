@@ -25,7 +25,7 @@ import {
   type MatchSubstitution,
   type MatchTeam,
 } from '@/data/matches';
-import { getPlayerMinutes } from '@/utils/player-minutes';
+import { getCardLabel, getDismissals, getPlayerMinutes } from '@/utils/player-minutes';
 
 const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
 
@@ -96,12 +96,23 @@ function getSubbedOffNames(team: MatchTeam, substitutions: MatchSubstitution[]) 
   );
 }
 
-/** Players currently on the pitch for this team (starting XI minus subs off, plus subs on). */
-function getOnPitchPlayers(team: MatchTeam, substitutions: MatchSubstitution[]) {
+/**
+ * Players currently on the pitch for this team (starting XI minus subs/sent-off,
+ * plus subs on). A dismissal (red card or second yellow) removes a player the
+ * same way a substitution does, but leaves the team playing with fewer players
+ * rather than opening their slot up to a reserve.
+ */
+function getOnPitchPlayers(
+  team: MatchTeam,
+  substitutions: MatchSubstitution[],
+  cards: MatchCard[] = [],
+): MatchPlayerOption[] {
   const roster = team.roster ?? [];
+  const dismissedNames = new Set(getDismissals(team, cards).keys());
   const assignedNames = Object.values(getEffectiveLineup(team, substitutions));
   return assignedNames
-    .map((name) => roster.find((player) => player.name === name) ?? { name })
+    .filter((name) => !dismissedNames.has(name))
+    .map((name): MatchPlayerOption => roster.find((player) => player.name === name) ?? { name })
     .filter(
       (player, index, players) =>
         players.findIndex((item) => item.name === player.name) === index,
@@ -109,18 +120,37 @@ function getOnPitchPlayers(team: MatchTeam, substitutions: MatchSubstitution[]) 
     .sort(comparePlayersByPosition);
 }
 
-/** Bench players who haven't played yet and are eligible to be subbed on (no return once subbed off). */
-function getAvailableReserves(team: MatchTeam, substitutions: MatchSubstitution[]) {
+/** Bench players who haven't played yet and are eligible to be subbed on (no return once subbed off or sent off). */
+function getAvailableReserves(
+  team: MatchTeam,
+  substitutions: MatchSubstitution[],
+  cards: MatchCard[] = [],
+): MatchPlayerOption[] {
   const roster = team.roster ?? [];
-  const onPitchNames = new Set(getOnPitchPlayers(team, substitutions).map((player) => player.name));
+  const onPitchNames = new Set(
+    getOnPitchPlayers(team, substitutions, cards).map((player) => player.name),
+  );
   const subbedOffNames = getSubbedOffNames(team, substitutions);
+  const dismissedNames = new Set(getDismissals(team, cards).keys());
   return roster
-    .filter((player) => !onPitchNames.has(player.name) && !subbedOffNames.has(player.name))
+    .filter(
+      (player) =>
+        !onPitchNames.has(player.name) &&
+        !subbedOffNames.has(player.name) &&
+        !dismissedNames.has(player.name),
+    )
     .sort(comparePlayersByPosition);
 }
 
-function getTeamPlayers(team: MatchTeam, substitutions: MatchSubstitution[] = []) {
-  return [...getOnPitchPlayers(team, substitutions), ...getAvailableReserves(team, substitutions)];
+function getTeamPlayers(
+  team: MatchTeam,
+  substitutions: MatchSubstitution[] = [],
+  cards: MatchCard[] = [],
+): MatchPlayerOption[] {
+  return [
+    ...getOnPitchPlayers(team, substitutions, cards),
+    ...getAvailableReserves(team, substitutions, cards),
+  ];
 }
 
 function getSubstitutionStats(team: MatchTeam, substitutions: MatchSubstitution[]) {
@@ -287,17 +317,19 @@ export default function LiveMatchScreen() {
                     : 'MATCH CLOCK';
   const selectedPlayers = useMemo(
     () =>
-      selectedScoringTeam ? getTeamPlayers(selectedScoringTeam, match?.substitutions ?? []) : [],
-    [selectedScoringTeam, match?.substitutions],
+      selectedScoringTeam
+        ? getTeamPlayers(selectedScoringTeam, match?.substitutions ?? [], match?.cards ?? [])
+        : [],
+    [selectedScoringTeam, match?.substitutions, match?.cards],
   );
   const assistOptions = useMemo(
     () =>
       pendingAssist
-        ? getTeamPlayers(pendingAssist.team, match?.substitutions ?? []).filter(
+        ? getTeamPlayers(pendingAssist.team, match?.substitutions ?? [], match?.cards ?? []).filter(
             (player) => player.name !== pendingAssist.scorerName,
           )
         : [],
-    [pendingAssist, match?.substitutions],
+    [pendingAssist, match?.substitutions, match?.cards],
   );
   const penaltyShootout = match?.penaltyShootout;
   const penaltyKicks = penaltyShootout?.kicks ?? [];
@@ -324,13 +356,13 @@ export default function LiveMatchScreen() {
           : match.homeTeam
       : null;
   const penaltyTakerOptions = currentPenaltyTeam
-    ? getTeamPlayers(currentPenaltyTeam, match?.substitutions ?? [])
+    ? getTeamPlayers(currentPenaltyTeam, match?.substitutions ?? [], match?.cards ?? [])
     : [];
   const activePenaltyTaker =
     selectedPenaltyTaker ?? penaltyTakerOptions[0]?.name ?? 'Taker not recorded';
 
   const canManageSubstitutions =
-    Boolean(match) && match.status !== 'completed' && period !== 'penalty-shootout';
+    match !== null && match.status !== 'completed' && period !== 'penalty-shootout';
   const hasReachedExtraTime =
     match?.extraTimeHalfStartedAtSeconds !== null && match?.extraTimeHalfStartedAtSeconds !== undefined;
   const maxSubstitutions = 5 + (hasReachedExtraTime ? 1 : 0);
@@ -344,26 +376,26 @@ export default function LiveMatchScreen() {
   const canAddNormalSub =
     effectiveSubsUsed < maxSubstitutions && (canStartNewSubWindow || pendingNormalSubsCount > 0);
   const subOnPitchOptions = subTeam
-    ? getOnPitchPlayers(subTeam, match?.substitutions ?? []).filter(
+    ? getOnPitchPlayers(subTeam, match?.substitutions ?? [], match?.cards ?? []).filter(
         (player) => !pendingSubs.some((item) => item.playerOutName === player.name),
       )
     : [];
   const subReserveOptions = subTeam
-    ? getAvailableReserves(subTeam, match?.substitutions ?? []).filter(
+    ? getAvailableReserves(subTeam, match?.substitutions ?? [], match?.cards ?? []).filter(
         (player) => !pendingSubs.some((item) => item.playerInName === player.name),
       )
     : [];
   const homePlayerMinutes = useMemo(
     () =>
       match
-        ? getPlayerMinutes(match.homeTeam, match.substitutions ?? [], elapsedSeconds)
+        ? getPlayerMinutes(match.homeTeam, match.substitutions ?? [], match.cards, elapsedSeconds)
         : [],
     [match, elapsedSeconds],
   );
   const awayPlayerMinutes = useMemo(
     () =>
       match
-        ? getPlayerMinutes(match.awayTeam, match.substitutions ?? [], elapsedSeconds)
+        ? getPlayerMinutes(match.awayTeam, match.substitutions ?? [], match.cards, elapsedSeconds)
         : [],
     [match, elapsedSeconds],
   );
@@ -1465,7 +1497,7 @@ export default function LiveMatchScreen() {
                         <View style={styles.goalInfo}>
                           <ThemedText style={styles.scorerName}>{card.playerName}</ThemedText>
                           <ThemedText type="small" themeColor="textSecondary">
-                            {team.name} · {card.type === 'yellow' ? 'Yellow card' : 'Red card'}
+                            {team.name} · {getCardLabel(card, match.cards)}
                           </ThemedText>
                         </View>
                         <ThemedText style={styles.cardTimestamp}>
@@ -1592,16 +1624,23 @@ export default function LiveMatchScreen() {
                               <ThemedText style={styles.scorerName} numberOfLines={1}>
                                 {entry.name}
                               </ThemedText>
-                              <ThemedText type="small" themeColor="textSecondary">
+                              <ThemedText
+                                type="small"
+                                themeColor={entry.sentOffAtSeconds !== null ? undefined : 'textSecondary'}
+                                style={entry.sentOffAtSeconds !== null && styles.sentOffText}>
                                 {entry.enteredAtSeconds === null
                                   ? 'Did not play'
-                                  : entry.exitedAtSeconds !== null
+                                  : entry.sentOffAtSeconds !== null
                                     ? entry.started
-                                      ? 'Started · Subbed off'
-                                      : 'Substitute · Subbed off'
-                                    : entry.started
-                                      ? 'Started · On pitch'
-                                      : 'Substitute · On pitch'}
+                                      ? 'Started · Sent off'
+                                      : 'Substitute · Sent off'
+                                    : entry.exitedAtSeconds !== null
+                                      ? entry.started
+                                        ? 'Started · Subbed off'
+                                        : 'Substitute · Subbed off'
+                                      : entry.started
+                                        ? 'Started · On pitch'
+                                        : 'Substitute · On pitch'}
                               </ThemedText>
                             </View>
                             <ThemedText style={styles.minutesValue}>
@@ -1903,8 +1942,13 @@ export default function LiveMatchScreen() {
                   style={styles.playerList}
                   contentContainerStyle={styles.playerListContent}
                   keyboardShouldPersistTaps="handled">
-                  {getTeamPlayers(selectedCardTeam, match?.substitutions ?? []).length > 0 ? (
-                    getTeamPlayers(selectedCardTeam, match?.substitutions ?? []).map((player, index) => (
+                  {getTeamPlayers(selectedCardTeam, match?.substitutions ?? [], match?.cards ?? [])
+                    .length > 0 ? (
+                    getTeamPlayers(
+                      selectedCardTeam,
+                      match?.substitutions ?? [],
+                      match?.cards ?? [],
+                    ).map((player, index) => (
                       <Pressable
                         key={`${player.number ?? index}-${player.name}`}
                         accessibilityRole="button"
@@ -2658,6 +2702,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
+  sentOffText: { color: '#dc3d3d', fontWeight: '700' },
   notesCard: {
     gap: Spacing.one,
     marginTop: Spacing.three,
