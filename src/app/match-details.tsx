@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { getMatchFixture, softDeleteMatchFixture, type MatchFixture } from '@/data/matches';
+import { useTheme } from '@/hooks/use-theme';
 
 const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
 
@@ -32,12 +33,76 @@ function formatMatchMinute(
   return `${halfLengthMinutes * 2}+${Math.floor((secondHalfElapsed - halfLength) / 60) + 1}'`;
 }
 
+function ChevronIcon({ expanded, color }: { expanded: boolean; color: string }) {
+  return (
+    <View
+      style={[
+        styles.chevronIcon,
+        { borderColor: color },
+        { transform: [{ rotate: expanded ? '225deg' : '45deg' }] },
+      ]}
+    />
+  );
+}
+
+function Section({
+  title,
+  meta,
+  expanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  meta?: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  const colors = useTheme();
+
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={`${title}${expanded ? ', expanded' : ', collapsed'}`}
+        onPress={onToggle}
+        style={({ pressed }) => [pressed && styles.sectionHeaderPressed]}>
+        <ThemedView type="backgroundElement" style={styles.sectionHeader}>
+          <ThemedText type="subtitle" style={styles.sectionTitle}>{title}</ThemedText>
+          <View style={styles.sectionHeaderRight}>
+            {meta ? (
+              <ThemedText type="small" themeColor="textSecondary">{meta}</ThemedText>
+            ) : null}
+            <View
+              style={[styles.sectionChevronBadge, expanded && styles.sectionChevronBadgeActive]}>
+              <ChevronIcon expanded={expanded} color={expanded ? '#ffffff' : colors.textSecondary} />
+            </View>
+          </View>
+        </ThemedView>
+      </Pressable>
+      {expanded ? children : null}
+    </>
+  );
+}
+
 export default function MatchDetailsScreen() {
   const router = useRouter();
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const [match, setMatch] = useState<MatchFixture | null>(null);
   const [error, setError] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [expandedSections, setExpandedSections] = useState({
+    goals: true,
+    discipline: true,
+    substitutions: true,
+    penalties: true,
+    notes: true,
+  });
+
+  function toggleSection(key: keyof typeof expandedSections) {
+    setExpandedSections((current) => ({ ...current, [key]: !current[key] }));
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -222,145 +287,143 @@ export default function MatchDetailsScreen() {
                 </View>
               </ThemedView>
 
-              <View style={styles.sectionHeader}>
-                <ThemedText type="subtitle" style={styles.sectionTitle}>Goals</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {match.goals.length}
-                </ThemedText>
-              </View>
-              {match.goals.length > 0 ? (
-                <View style={styles.eventList}>
-                  {[...match.goals]
-                    .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds)
-                    .map((goal) => {
-                      const team =
-                        goal.teamId === match.homeTeam.id ? match.homeTeam : match.awayTeam;
-                      return (
-                        <View key={goal.id} style={styles.eventRow}>
-                          <ThemedText style={styles.eventMinute}>
-                            {formatMatchMinute(
-                              goal.elapsedSeconds,
-                              match.firstHalfAdditionalMinutes,
-                              match.secondHalfAdditionalMinutes,
-                              match.halfLengthMinutes,
-                            )}
-                          </ThemedText>
-                          <View style={styles.eventInfo}>
-                            <ThemedText style={styles.eventTitle}>{goal.playerName}</ThemedText>
-                            <ThemedText type="small" themeColor="textSecondary">
-                              {team.name}
-                              {goal.assistPlayerName ? ` · Assist: ${goal.assistPlayerName}` : ''}
+              <Section
+                title="Goals"
+                meta={`${match.goals.length}`}
+                expanded={expandedSections.goals}
+                onToggle={() => toggleSection('goals')}>
+                {match.goals.length > 0 ? (
+                  <View style={styles.eventList}>
+                    {[...match.goals]
+                      .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds)
+                      .map((goal) => {
+                        const team =
+                          goal.teamId === match.homeTeam.id ? match.homeTeam : match.awayTeam;
+                        return (
+                          <View key={goal.id} style={styles.eventRow}>
+                            <ThemedText style={styles.eventMinute}>
+                              {formatMatchMinute(
+                                goal.elapsedSeconds,
+                                match.firstHalfAdditionalMinutes,
+                                match.secondHalfAdditionalMinutes,
+                                match.halfLengthMinutes,
+                              )}
                             </ThemedText>
+                            <View style={styles.eventInfo}>
+                              <ThemedText style={styles.eventTitle}>{goal.playerName}</ThemedText>
+                              <ThemedText type="small" themeColor="textSecondary">
+                                {team.name}
+                                {goal.assistPlayerName ? ` · Assist: ${goal.assistPlayerName}` : ''}
+                              </ThemedText>
+                            </View>
+                            <ThemedText style={styles.goalMark}>GOAL</ThemedText>
                           </View>
-                          <ThemedText style={styles.goalMark}>GOAL</ThemedText>
-                        </View>
-                      );
-                    })}
-                </View>
-              ) : (
-                <ThemedView type="backgroundElement" style={styles.emptyCard}>
-                  <ThemedText type="small" themeColor="textSecondary">No goals recorded.</ThemedText>
-                </ThemedView>
-              )}
+                        );
+                      })}
+                  </View>
+                ) : (
+                  <ThemedView type="backgroundElement" style={styles.emptyCard}>
+                    <ThemedText type="small" themeColor="textSecondary">No goals recorded.</ThemedText>
+                  </ThemedView>
+                )}
+              </Section>
 
-              <View style={styles.sectionHeader}>
-                <ThemedText type="subtitle" style={styles.sectionTitle}>Discipline</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {match.cards.length}
-                </ThemedText>
-              </View>
-              {match.cards.length > 0 ? (
-                <View style={styles.eventList}>
-                  {[...match.cards]
-                    .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds)
-                    .map((card) => {
-                      const team =
-                        card.teamId === match.homeTeam.id ? match.homeTeam : match.awayTeam;
-                      const cardColor = card.type === 'yellow' ? '#f5c542' : '#dc3d3d';
-                      return (
-                        <View key={card.id} style={styles.eventRow}>
-                          <ThemedText style={styles.eventMinute}>
-                            {formatMatchMinute(
-                              card.elapsedSeconds,
-                              match.firstHalfAdditionalMinutes,
-                              match.secondHalfAdditionalMinutes,
-                              match.halfLengthMinutes,
-                            )}
-                          </ThemedText>
-                          <View style={styles.eventInfo}>
-                            <ThemedText style={styles.eventTitle}>{card.playerName}</ThemedText>
-                            <ThemedText type="small" themeColor="textSecondary">
-                              {team.name} · {card.type === 'yellow' ? 'Yellow card' : 'Red card'}
+              <Section
+                title="Discipline"
+                meta={`${match.cards.length}`}
+                expanded={expandedSections.discipline}
+                onToggle={() => toggleSection('discipline')}>
+                {match.cards.length > 0 ? (
+                  <View style={styles.eventList}>
+                    {[...match.cards]
+                      .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds)
+                      .map((card) => {
+                        const team =
+                          card.teamId === match.homeTeam.id ? match.homeTeam : match.awayTeam;
+                        const cardColor = card.type === 'yellow' ? '#f5c542' : '#dc3d3d';
+                        return (
+                          <View key={card.id} style={styles.eventRow}>
+                            <ThemedText style={styles.eventMinute}>
+                              {formatMatchMinute(
+                                card.elapsedSeconds,
+                                match.firstHalfAdditionalMinutes,
+                                match.secondHalfAdditionalMinutes,
+                                match.halfLengthMinutes,
+                              )}
                             </ThemedText>
+                            <View style={styles.eventInfo}>
+                              <ThemedText style={styles.eventTitle}>{card.playerName}</ThemedText>
+                              <ThemedText type="small" themeColor="textSecondary">
+                                {team.name} · {card.type === 'yellow' ? 'Yellow card' : 'Red card'}
+                              </ThemedText>
+                            </View>
+                            <View style={[styles.cardMark, { backgroundColor: cardColor }]} />
                           </View>
-                          <View style={[styles.cardMark, { backgroundColor: cardColor }]} />
-                        </View>
-                      );
-                    })}
-                </View>
-              ) : (
-                <ThemedView type="backgroundElement" style={styles.emptyCard}>
-                  <ThemedText type="small" themeColor="textSecondary">No cards recorded.</ThemedText>
-                </ThemedView>
-              )}
+                        );
+                      })}
+                  </View>
+                ) : (
+                  <ThemedView type="backgroundElement" style={styles.emptyCard}>
+                    <ThemedText type="small" themeColor="textSecondary">No cards recorded.</ThemedText>
+                  </ThemedView>
+                )}
+              </Section>
 
-              <View style={styles.sectionHeader}>
-                <ThemedText type="subtitle" style={styles.sectionTitle}>Substitutions</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {(match.substitutions ?? []).length}
-                </ThemedText>
-              </View>
-              {(match.substitutions ?? []).length > 0 ? (
-                <View style={styles.eventList}>
-                  {[...(match.substitutions ?? [])]
-                    .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds)
-                    .map((sub) => {
-                      const team =
-                        sub.teamId === match.homeTeam.id ? match.homeTeam : match.awayTeam;
-                      return (
-                        <View key={sub.id} style={styles.eventRow}>
-                          <ThemedText style={styles.eventMinute}>
-                            {formatMatchMinute(
-                              sub.elapsedSeconds,
-                              match.firstHalfAdditionalMinutes,
-                              match.secondHalfAdditionalMinutes,
-                              match.halfLengthMinutes,
-                            )}
-                          </ThemedText>
-                          <View style={styles.eventInfo}>
-                            <ThemedText style={styles.eventTitle}>
-                              {sub.playerInName} for {sub.playerOutName}
+              <Section
+                title="Substitutions"
+                meta={`${(match.substitutions ?? []).length}`}
+                expanded={expandedSections.substitutions}
+                onToggle={() => toggleSection('substitutions')}>
+                {(match.substitutions ?? []).length > 0 ? (
+                  <View style={styles.eventList}>
+                    {[...(match.substitutions ?? [])]
+                      .sort((a, b) => a.elapsedSeconds - b.elapsedSeconds)
+                      .map((sub) => {
+                        const team =
+                          sub.teamId === match.homeTeam.id ? match.homeTeam : match.awayTeam;
+                        return (
+                          <View key={sub.id} style={styles.eventRow}>
+                            <ThemedText style={styles.eventMinute}>
+                              {formatMatchMinute(
+                                sub.elapsedSeconds,
+                                match.firstHalfAdditionalMinutes,
+                                match.secondHalfAdditionalMinutes,
+                                match.halfLengthMinutes,
+                              )}
                             </ThemedText>
-                            <ThemedText type="small" themeColor="textSecondary">
-                              {team.name}
-                              {sub.isConcussion ? ' · Concussion substitute' : ''}
-                            </ThemedText>
+                            <View style={styles.eventInfo}>
+                              <ThemedText style={styles.eventTitle}>
+                                {sub.playerInName} for {sub.playerOutName}
+                              </ThemedText>
+                              <ThemedText type="small" themeColor="textSecondary">
+                                {team.name}
+                                {sub.isConcussion ? ' · Concussion substitute' : ''}
+                              </ThemedText>
+                            </View>
+                            <ThemedText style={styles.subMark}>⇄</ThemedText>
                           </View>
-                          <ThemedText style={styles.subMark}>⇄</ThemedText>
-                        </View>
-                      );
-                    })}
-                </View>
-              ) : (
-                <ThemedView type="backgroundElement" style={styles.emptyCard}>
-                  <ThemedText type="small" themeColor="textSecondary">No substitutions recorded.</ThemedText>
-                </ThemedView>
-              )}
+                        );
+                      })}
+                  </View>
+                ) : (
+                  <ThemedView type="backgroundElement" style={styles.emptyCard}>
+                    <ThemedText type="small" themeColor="textSecondary">No substitutions recorded.</ThemedText>
+                  </ThemedView>
+                )}
+              </Section>
 
               {match.penaltyShootout ? (
-                <>
-                  <View style={styles.sectionHeader}>
-                    <ThemedText type="subtitle" style={styles.sectionTitle}>
-                      Penalty shootout
-                    </ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {penaltyWinnerId
-                        ? `${penaltyWinnerId === match.homeTeam.id
-                            ? match.homeTeam.name
-                            : match.awayTeam.name} won`
-                        : 'No winner recorded'}
-                    </ThemedText>
-                  </View>
+                <Section
+                  title="Penalty shootout"
+                  meta={
+                    penaltyWinnerId
+                      ? `${penaltyWinnerId === match.homeTeam.id
+                          ? match.homeTeam.name
+                          : match.awayTeam.name} won`
+                      : 'No winner recorded'
+                  }
+                  expanded={expandedSections.penalties}
+                  onToggle={() => toggleSection('penalties')}>
                   <View style={styles.eventList}>
                     {match.penaltyShootout.kicks.map((kick, index) => {
                       const team =
@@ -385,18 +448,18 @@ export default function MatchDetailsScreen() {
                       );
                     })}
                   </View>
-                </>
+                </Section>
               ) : null}
 
               {match.notes ? (
-                <>
-                  <View style={styles.sectionHeader}>
-                    <ThemedText type="subtitle" style={styles.sectionTitle}>Match notes</ThemedText>
-                  </View>
+                <Section
+                  title="Match notes"
+                  expanded={expandedSections.notes}
+                  onToggle={() => toggleSection('notes')}>
                   <ThemedView type="backgroundElement" style={styles.notesCard}>
                     <ThemedText themeColor="textSecondary">{match.notes}</ThemedText>
                   </ThemedView>
-                </>
+                </Section>
               ) : null}
             </>
           ) : error ? (
@@ -499,11 +562,34 @@ const styles = StyleSheet.create({
     borderTopColor: HAIRLINE,
   },
   sectionHeader: {
+    minHeight: 52,
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: Spacing.four,
-    marginBottom: Spacing.two,
+    marginTop: Spacing.three,
+    marginBottom: Spacing.one,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Spacing.two,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: HAIRLINE,
+  },
+  sectionHeaderPressed: { opacity: 0.6 },
+  sectionHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  sectionChevronBadge: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    backgroundColor: 'rgba(128, 128, 128, 0.16)',
+  },
+  sectionChevronBadgeActive: { backgroundColor: '#1f7a4d' },
+  chevronIcon: {
+    width: 8,
+    height: 8,
+    marginTop: -3,
+    borderRightWidth: 2,
+    borderBottomWidth: 2,
   },
   sectionTitle: { fontSize: 17, lineHeight: 22, fontWeight: '800' },
   eventList: {
