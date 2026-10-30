@@ -484,12 +484,16 @@ export default function LiveMatchScreen() {
 
   async function startSecondHalf() {
     if (!match || busy || period !== 'half-time') return;
+    // Always kick off the second half at the clean half-time mark (e.g. 45:00),
+    // regardless of how much first-half stoppage time ran or how long the
+    // referee took to press this button — neither should carry into the clock.
     await persistMatch({
       ...match,
+      elapsedSeconds: halfLengthSeconds,
       startedAt: getCurrentTimestamp(),
       status: 'in-progress',
       period: 'regulation',
-      secondHalfStartedAtSeconds: Math.floor(elapsedSeconds),
+      secondHalfStartedAtSeconds: halfLengthSeconds,
     });
   }
 
