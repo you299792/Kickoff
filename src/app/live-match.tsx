@@ -937,12 +937,12 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={endFirstHalf}
-                    disabled={busy || match.status === 'completed'}
+                    disabled={match.status === 'completed'}
                     style={({ pressed }) => [
                       styles.periodActionButton,
                       styles.periodActionSecondary,
                       pressed && styles.pressed,
-                      (busy || match.status === 'completed') && styles.disabled,
+                      match.status === 'completed' && styles.disabled,
                     ]}>
                     <ThemedText style={styles.periodActionSecondaryText}>
                       Proceed to half time
@@ -953,12 +953,12 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={endMatch}
-                    disabled={busy || match.status === 'completed'}
+                    disabled={match.status === 'completed'}
                     style={({ pressed }) => [
                       styles.periodActionButton,
                       styles.periodActionSecondary,
                       pressed && styles.pressed,
-                      (busy || match.status === 'completed') && styles.disabled,
+                      match.status === 'completed' && styles.disabled,
                     ]}>
                     <ThemedText style={styles.periodActionSecondaryText}>
                       End match and go to full time
@@ -969,12 +969,10 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={startSecondHalf}
-                    disabled={busy}
                     style={({ pressed }) => [
                       styles.periodActionButton,
                       styles.periodActionPrimary,
                       pressed && styles.pressed,
-                      busy && styles.disabled,
                     ]}>
                     <ThemedText style={styles.periodActionPrimaryText}>
                       Start second half
@@ -985,12 +983,10 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={endExtraTimeFirstHalf}
-                    disabled={busy}
                     style={({ pressed }) => [
                       styles.periodActionButton,
                       styles.periodActionSecondary,
                       pressed && styles.pressed,
-                      busy && styles.disabled,
                     ]}>
                     <ThemedText style={styles.periodActionSecondaryText}>
                       End first extra-time half
@@ -1001,12 +997,10 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={startExtraTimeSecondHalf}
-                    disabled={busy}
                     style={({ pressed }) => [
                       styles.periodActionButton,
                       styles.periodActionPrimary,
                       pressed && styles.pressed,
-                      busy && styles.disabled,
                     ]}>
                     <ThemedText style={styles.periodActionPrimaryText}>
                       Start second {extraTimeHalfMinutes}-minute half
@@ -1017,12 +1011,10 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={endMatch}
-                    disabled={busy}
                     style={({ pressed }) => [
                       styles.periodActionButton,
                       styles.periodActionSecondary,
                       pressed && styles.pressed,
-                      busy && styles.disabled,
                     ]}>
                     <ThemedText style={styles.periodActionSecondaryText}>
                       End match
@@ -1044,12 +1036,10 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={endAsDraw}
-                    disabled={busy}
                     style={({ pressed }) => [
                       styles.periodActionButton,
                       styles.periodActionSecondary,
                       pressed && styles.pressed,
-                      busy && styles.disabled,
                     ]}>
                     <ThemedText style={styles.periodActionSecondaryText}>
                       End match as a draw
@@ -1059,12 +1049,10 @@ export default function LiveMatchScreen() {
                     <Pressable
                       accessibilityRole="button"
                       onPress={startExtraTime}
-                      disabled={busy}
                       style={({ pressed }) => [
                         styles.periodActionButton,
                         styles.periodActionPrimary,
                         pressed && styles.pressed,
-                        busy && styles.disabled,
                       ]}>
                       <ThemedText style={styles.periodActionPrimaryText}>
                         Add {extraTimeHalfMinutes * 2} minutes of extra time
@@ -1104,12 +1092,10 @@ export default function LiveMatchScreen() {
                   <Pressable
                     accessibilityRole="button"
                     onPress={startPenaltyShootout}
-                    disabled={busy}
                     style={({ pressed }) => [
                       styles.periodActionButton,
                       styles.periodActionPrimary,
                       pressed && styles.pressed,
-                      busy && styles.disabled,
                     ]}>
                     <ThemedText style={styles.periodActionPrimaryText}>
                       Proceed to penalty shootout
@@ -1320,17 +1306,14 @@ export default function LiveMatchScreen() {
                         accessibilityRole="button"
                         accessibilityState={{
                           selected: match.firstHalfAdditionalMinutes === minutes,
-                          disabled: busy,
                         }}
                         accessibilityLabel={`Set first-half added time to ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`}
-                        disabled={busy}
                         onPress={() => setAdditionalTime('first', minutes)}
                         style={({ pressed }) => [
                           styles.additionalTimeOption,
                           match.firstHalfAdditionalMinutes === minutes &&
                             styles.additionalTimeOptionSelected,
                           pressed && styles.pressed,
-                          busy && styles.disabled,
                         ]}>
                         <ThemedText
                           style={[
@@ -1371,17 +1354,14 @@ export default function LiveMatchScreen() {
                         accessibilityRole="button"
                         accessibilityState={{
                           selected: match.secondHalfAdditionalMinutes === minutes,
-                          disabled: busy,
                         }}
                         accessibilityLabel={`Set second-half added time to ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`}
-                        disabled={busy}
                         onPress={() => setAdditionalTime('second', minutes)}
                         style={({ pressed }) => [
                           styles.additionalTimeOption,
                           match.secondHalfAdditionalMinutes === minutes &&
                             styles.additionalTimeOptionSelected,
                           pressed && styles.pressed,
-                          busy && styles.disabled,
                         ]}>
                         <ThemedText
                           style={[
