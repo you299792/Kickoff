@@ -172,13 +172,22 @@ export async function shareBackup(): Promise<BackupSummary> {
 }
 
 async function readPickedFile(asset: DocumentPicker.DocumentPickerAsset): Promise<string> {
-  if (Platform.OS === 'web') {
-    if (asset.file) return asset.file.text();
-    if (asset.base64) return atob(asset.base64.split(',').pop() ?? asset.base64);
-    const response = await fetch(asset.uri);
-    return response.text();
+  if (Platform.OS === 'web' && asset.file) {
+    return asset.file.text();
   }
-  return new File(asset.uri).text();
+  if (Platform.OS === 'web' && asset.base64) {
+    return atob(asset.base64.split(',').pop() ?? asset.base64);
+  }
+  // Both the new File API and the legacy readAsStringAsync go through
+  // expo-file-system's own URI-permission handling, which can reject
+  // externally-picked content:// URIs on Android even when copyToCacheDirectory
+  // is set. React Native's built-in fetch reads local file/content URIs through
+  // its own native bridge and sidesteps that permission check entirely.
+  const response = await fetch(asset.uri);
+  if (!response.ok) {
+    throw new Error('Unable to read the selected file.');
+  }
+  return response.text();
 }
 
 function mergeById<T>(existing: T[], incoming: T[], getId: (item: T) => string): T[] {
