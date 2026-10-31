@@ -6,6 +6,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import {
+  pickAndImportBackup,
+  saveBackupToDevice,
+  shareBackup,
+  type ImportMode,
+} from '@/data/backup';
 import { useTheme } from '@/hooks/use-theme';
 import {
   getMatchFixtures,
@@ -84,6 +90,12 @@ export default function HomeScreen() {
   const [deletingMatchId, setDeletingMatchId] = useState<string | null>(null);
   const [matchActionsTarget, setMatchActionsTarget] = useState<MatchFixture | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [backupModalVisible, setBackupModalVisible] = useState(false);
+  const [exportingBackupAction, setExportingBackupAction] = useState<'save' | 'share' | null>(
+    null,
+  );
+  const [isImportingBackup, setIsImportingBackup] = useState(false);
+  const [backupError, setBackupError] = useState('');
   const longPressedMatchId = useRef<string | null>(null);
 
   const loadMatches = useCallback(async () => {
@@ -108,6 +120,75 @@ export default function HomeScreen() {
     setIsRefreshing(true);
     await loadMatches();
     setIsRefreshing(false);
+  }
+
+  async function handleSaveBackup() {
+    if (exportingBackupAction || isImportingBackup) return;
+    setExportingBackupAction('save');
+    setBackupError('');
+    try {
+      await saveBackupToDevice();
+    } catch (exportError) {
+      setBackupError(
+        exportError instanceof Error ? exportError.message : 'Unable to save a backup.',
+      );
+    } finally {
+      setExportingBackupAction(null);
+    }
+  }
+
+  async function handleShareBackup() {
+    if (exportingBackupAction || isImportingBackup) return;
+    setExportingBackupAction('share');
+    setBackupError('');
+    try {
+      await shareBackup();
+    } catch (exportError) {
+      setBackupError(
+        exportError instanceof Error ? exportError.message : 'Unable to export a backup.',
+      );
+    } finally {
+      setExportingBackupAction(null);
+    }
+  }
+
+  async function handleImportBackup(mode: ImportMode) {
+    if (exportingBackupAction || isImportingBackup) return;
+    setIsImportingBackup(true);
+    setBackupError('');
+    try {
+      const summary = await pickAndImportBackup(mode);
+      if (summary) {
+        setBackupModalVisible(false);
+        await loadMatches();
+        Alert.alert(
+          'Import complete',
+          `Restored ${summary.teams} ${summary.teams === 1 ? 'team' : 'teams'}, ${summary.matches} ${summary.matches === 1 ? 'match' : 'matches'}, and ${summary.deletedMatches} deleted ${summary.deletedMatches === 1 ? 'match' : 'matches'} from the backup.`,
+        );
+      }
+    } catch (importError) {
+      setBackupError(
+        importError instanceof Error ? importError.message : 'Unable to import that backup.',
+      );
+    } finally {
+      setIsImportingBackup(false);
+    }
+  }
+
+  function confirmImportBackup() {
+    Alert.alert(
+      'Import backup',
+      'Merge keeps what you already have and adds anything new from the file. Replace deletes everything currently on this device first.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Merge', onPress: () => void handleImportBackup('merge') },
+        {
+          text: 'Replace everything',
+          style: 'destructive',
+          onPress: () => void handleImportBackup('replace'),
+        },
+      ],
+    );
   }
 
   const upcomingMatches = useMemo(
@@ -274,6 +355,20 @@ export default function HomeScreen() {
               pressed && styles.chipPressed,
             ]}>
             <ThemedText style={styles.deletedMatchesButtonText}>Recently deleted</ThemedText>
+            <ThemedText themeColor="textSecondary">›</ThemedText>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setBackupError('');
+              setBackupModalVisible(true);
+            }}
+            style={({ pressed }) => [
+              styles.deletedMatchesButton,
+              pressed && styles.chipPressed,
+            ]}>
+            <ThemedText style={styles.backupButtonText}>Backup &amp; restore</ThemedText>
             <ThemedText themeColor="textSecondary">›</ThemedText>
           </Pressable>
 
@@ -607,6 +702,80 @@ export default function HomeScreen() {
             ) : null}
           </View>
         </Modal>
+        <Modal
+          visible={backupModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setBackupModalVisible(false)}>
+          <View style={styles.actionOverlay}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close backup options"
+              onPress={() => setBackupModalVisible(false)}
+              style={StyleSheet.absoluteFill}
+            />
+            <ThemedView type="backgroundElement" style={styles.actionPanel}>
+              <ThemedText type="subtitle" style={styles.actionTitle}>Backup &amp; restore</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.actionSubtitle}>
+                Save all your teams and match history to a file, or restore from one.
+              </ThemedText>
+              {backupError ? (
+                <ThemedText style={styles.backupErrorText}>{backupError}</ThemedText>
+              ) : null}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Save a backup file to this device"
+                disabled={exportingBackupAction !== null || isImportingBackup}
+                onPress={() => void handleSaveBackup()}
+                style={({ pressed }) => [
+                  styles.backupActionButton,
+                  pressed && styles.chipPressed,
+                  (exportingBackupAction !== null || isImportingBackup) && styles.disabled,
+                ]}>
+                <ThemedText style={styles.backupActionButtonText}>
+                  {exportingBackupAction === 'save' ? 'Saving…' : 'Save to device'}
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Share a backup file"
+                disabled={exportingBackupAction !== null || isImportingBackup}
+                onPress={() => void handleShareBackup()}
+                style={({ pressed }) => [
+                  styles.backupActionButtonSecondary,
+                  pressed && styles.chipPressed,
+                  (exportingBackupAction !== null || isImportingBackup) && styles.disabled,
+                ]}>
+                <ThemedText style={styles.backupActionButtonSecondaryText}>
+                  {exportingBackupAction === 'share' ? 'Sharing…' : 'Share backup'}
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Import a backup file"
+                disabled={exportingBackupAction !== null || isImportingBackup}
+                onPress={confirmImportBackup}
+                style={({ pressed }) => [
+                  styles.backupActionButtonSecondary,
+                  pressed && styles.chipPressed,
+                  (exportingBackupAction !== null || isImportingBackup) && styles.disabled,
+                ]}>
+                <ThemedText style={styles.backupActionButtonSecondaryText}>
+                  {isImportingBackup ? 'Importing…' : 'Import backup'}
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setBackupModalVisible(false)}
+                style={({ pressed }) => [
+                  styles.overlayCancelButton,
+                  pressed && styles.chipPressed,
+                ]}>
+                <ThemedText style={styles.overlayCancelText}>Close</ThemedText>
+              </Pressable>
+            </ThemedView>
+          </View>
+        </Modal>
       </SafeAreaView>
     </ThemedView>
   );
@@ -657,6 +826,7 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE,
   },
   deletedMatchesButtonText: { color: '#c0392b', fontSize: 14, fontWeight: '700' },
+  backupButtonText: { color: '#1f7a4d', fontSize: 14, fontWeight: '700' },
   upcomingSection: {
     marginBottom: Spacing.four,
   },
@@ -921,6 +1091,24 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE,
   },
   overlayCancelText: { fontSize: 14, fontWeight: '700' },
+  backupErrorText: { color: '#c0392b', fontSize: 13, lineHeight: 19 },
+  backupActionButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    backgroundColor: '#1f7a4d',
+  },
+  backupActionButtonText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  backupActionButtonSecondary: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: '#1f7a4d',
+  },
+  backupActionButtonSecondaryText: { color: '#1f7a4d', fontSize: 14, fontWeight: '800' },
   emptyState: {
     padding: Spacing.four,
     borderRadius: Spacing.three,

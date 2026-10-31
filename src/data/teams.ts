@@ -23,7 +23,7 @@ function isTeamPlayer(value: unknown): value is CreatedTeam['roster'][number] {
   );
 }
 
-function isCreatedTeam(value: unknown): value is CreatedTeam {
+export function isCreatedTeam(value: unknown): value is CreatedTeam {
   if (typeof value !== 'object' || value === null) return false;
   const team = value as Record<string, unknown>;
   if (
@@ -82,4 +82,9 @@ export async function deleteCreatedTeam(teamId: string): Promise<void> {
     throw new Error('This team could not be found. Refresh the Teams screen and try again.');
   }
   await AsyncStorage.setItem(CREATED_TEAMS_STORAGE_KEY, JSON.stringify(updatedTeams));
+}
+
+/** Overwrites the entire saved-teams list. Used by backup import. */
+export async function replaceAllCreatedTeams(teams: CreatedTeam[]): Promise<void> {
+  await AsyncStorage.setItem(CREATED_TEAMS_STORAGE_KEY, JSON.stringify(teams));
 }

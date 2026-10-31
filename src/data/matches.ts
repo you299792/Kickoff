@@ -211,7 +211,7 @@ function isMatchPenaltyShootout(
   );
 }
 
-function isMatchFixture(value: unknown): value is MatchFixture {
+export function isMatchFixture(value: unknown): value is MatchFixture {
   if (typeof value !== 'object' || value === null) return false;
   const match = value as Record<string, unknown>;
   return (
@@ -256,7 +256,7 @@ function isMatchFixture(value: unknown): value is MatchFixture {
   );
 }
 
-function isDeletedMatchFixture(value: unknown): value is DeletedMatchFixture {
+export function isDeletedMatchFixture(value: unknown): value is DeletedMatchFixture {
   if (typeof value !== 'object' || value === null) return false;
   const deletedMatch = value as Record<string, unknown>;
   return (
@@ -379,4 +379,16 @@ export async function permanentlyDeleteMatchFixture(matchId: string): Promise<vo
     DELETED_MATCHES_STORAGE_KEY,
     JSON.stringify(deletedMatches.filter((item) => item.match.id !== matchId)),
   );
+}
+
+/** Overwrites the entire saved-matches list. Used by backup import. */
+export async function replaceAllMatchFixtures(matches: MatchFixture[]): Promise<void> {
+  await AsyncStorage.setItem(MATCHES_STORAGE_KEY, JSON.stringify(matches));
+}
+
+/** Overwrites the entire deleted-matches list. Used by backup import. */
+export async function replaceAllDeletedMatchFixtures(
+  deletedMatches: DeletedMatchFixture[],
+): Promise<void> {
+  await AsyncStorage.setItem(DELETED_MATCHES_STORAGE_KEY, JSON.stringify(deletedMatches));
 }
