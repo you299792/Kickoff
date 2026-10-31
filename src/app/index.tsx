@@ -258,13 +258,20 @@ export default function HomeScreen() {
   );
 
   const stats = [
-    { label: 'Played', value: `${summary.played}` },
-    { label: 'Won', value: `${summary.wins}` },
-    { label: 'Drawn', value: `${summary.draws}` },
-    { label: 'Lost', value: `${summary.losses}` },
+    { label: 'Played', value: `${summary.played}`, color: undefined },
+    { label: 'Won', value: `${summary.wins}`, color: '#1f7a4d' },
+    { label: 'Drawn', value: `${summary.draws}`, color: '#b4821a' },
+    { label: 'Lost', value: `${summary.losses}`, color: '#c0392b' },
     {
       label: 'GD',
-      value: summary.goalDifference > 0 ? `+${summary.goalDifference}` : `${summary.goalDifference}`,
+      value:
+        summary.goalDifference > 0 ? `+${summary.goalDifference}` : `${summary.goalDifference}`,
+      color:
+        summary.goalDifference > 0
+          ? '#1f7a4d'
+          : summary.goalDifference < 0
+            ? '#c0392b'
+            : undefined,
     },
   ];
 
@@ -337,7 +344,9 @@ export default function HomeScreen() {
                 <Fragment key={stat.label}>
                   {index > 0 ? <View style={styles.statDivider} /> : null}
                   <View style={styles.stat}>
-                    <ThemedText style={styles.statValue}>{stat.value}</ThemedText>
+                    <ThemedText style={[styles.statValue, stat.color ? { color: stat.color } : null]}>
+                      {stat.value}
+                    </ThemedText>
                     <ThemedText type="small" themeColor="textSecondary" style={styles.statLabel}>
                       {stat.label}
                     </ThemedText>
@@ -347,30 +356,34 @@ export default function HomeScreen() {
             </View>
           </ThemedView>
 
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/deleted-matches')}
-            style={({ pressed }) => [
-              styles.deletedMatchesButton,
-              pressed && styles.chipPressed,
-            ]}>
-            <ThemedText style={styles.deletedMatchesButtonText}>Recently deleted</ThemedText>
-            <ThemedText themeColor="textSecondary">›</ThemedText>
-          </Pressable>
+          <View style={styles.quickActionsRow}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/deleted-matches')}
+              style={({ pressed }) => [
+                styles.quickActionButton,
+                pressed && styles.chipPressed,
+              ]}>
+              <ThemedText style={styles.deletedMatchesButtonText} numberOfLines={1}>
+                Recently deleted
+              </ThemedText>
+            </Pressable>
 
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => {
-              setBackupError('');
-              setBackupModalVisible(true);
-            }}
-            style={({ pressed }) => [
-              styles.deletedMatchesButton,
-              pressed && styles.chipPressed,
-            ]}>
-            <ThemedText style={styles.backupButtonText}>Backup &amp; restore</ThemedText>
-            <ThemedText themeColor="textSecondary">›</ThemedText>
-          </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => {
+                setBackupError('');
+                setBackupModalVisible(true);
+              }}
+              style={({ pressed }) => [
+                styles.quickActionButton,
+                pressed && styles.chipPressed,
+              ]}>
+              <ThemedText style={styles.backupButtonText} numberOfLines={1}>
+                Backup &amp; restore
+              </ThemedText>
+            </Pressable>
+          </View>
 
           {upcomingMatches.length > 0 || fixturesError ? (
             <View style={styles.upcomingSection}>
@@ -813,20 +826,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     borderRadius: Spacing.three,
     marginBottom: Spacing.four,
+    shadowColor: '#000000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
   },
-  deletedMatchesButton: {
-    minHeight: 48,
+  quickActionsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Spacing.two,
     marginBottom: Spacing.four,
-    paddingHorizontal: Spacing.three,
+  },
+  quickActionButton: {
+    flex: 1,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.two,
     borderRadius: Spacing.three,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: HAIRLINE,
   },
-  deletedMatchesButtonText: { color: '#c0392b', fontSize: 14, fontWeight: '700' },
-  backupButtonText: { color: '#1f7a4d', fontSize: 14, fontWeight: '700' },
+  deletedMatchesButtonText: { color: '#c0392b', fontSize: 13, fontWeight: '700' },
+  backupButtonText: { color: '#1f7a4d', fontSize: 13, fontWeight: '700' },
   upcomingSection: {
     marginBottom: Spacing.four,
   },
@@ -836,6 +858,11 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: HAIRLINE,
+    shadowColor: '#000000',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   upcomingTeams: {
     flexDirection: 'row',
@@ -965,6 +992,13 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: Spacing.three,
     gap: Spacing.two,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: HAIRLINE,
+    shadowColor: '#000000',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   cardPressed: { opacity: 0.75 },
   cardTopRow: {
