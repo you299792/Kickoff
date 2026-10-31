@@ -16,12 +16,16 @@ import {
 } from './matches';
 import {
   getCreatedTeams,
+  getDeletedCreatedTeams,
   isCreatedTeam,
+  isDeletedCreatedTeam,
   replaceAllCreatedTeams,
+  replaceAllDeletedCreatedTeams,
   type CreatedTeam,
+  type DeletedCreatedTeam,
 } from './teams';
 
-export const BACKUP_FORMAT_VERSION = 1;
+export const BACKUP_FORMAT_VERSION = 2;
 
 export type KickoffBackup = {
   formatVersion: number;
@@ -29,6 +33,8 @@ export type KickoffBackup = {
   teams: CreatedTeam[];
   matches: MatchFixture[];
   deletedMatches: DeletedMatchFixture[];
+  /** Added in format version 2; absent on older backups. */
+  deletedTeams?: DeletedCreatedTeam[];
 };
 
 export type ImportMode = 'merge' | 'replace';
@@ -37,8 +43,10 @@ export type BackupSummary = {
   teams: number;
   matches: number;
   deletedMatches: number;
+  deletedTeams: number;
 };
 
+/** Accepts backups from format version 1 (no deletedTeams field) as well as the current version. */
 function isKickoffBackup(value: unknown): value is KickoffBackup {
   if (typeof value !== 'object' || value === null) return false;
   const backup = value as Record<string, unknown>;
@@ -50,7 +58,9 @@ function isKickoffBackup(value: unknown): value is KickoffBackup {
     Array.isArray(backup.matches) &&
     backup.matches.every(isMatchFixture) &&
     Array.isArray(backup.deletedMatches) &&
-    backup.deletedMatches.every(isDeletedMatchFixture)
+    backup.deletedMatches.every(isDeletedMatchFixture) &&
+    (backup.deletedTeams === undefined ||
+      (Array.isArray(backup.deletedTeams) && backup.deletedTeams.every(isDeletedCreatedTeam)))
   );
 }
 
@@ -61,10 +71,11 @@ function formatBackupFileName(date: Date) {
 }
 
 export async function buildBackup(): Promise<KickoffBackup> {
-  const [teams, matches, deletedMatches] = await Promise.all([
+  const [teams, matches, deletedMatches, deletedTeams] = await Promise.all([
     getCreatedTeams(),
     getMatchFixtures(),
     getDeletedMatchFixtures(),
+    getDeletedCreatedTeams(),
   ]);
   return {
     formatVersion: BACKUP_FORMAT_VERSION,
@@ -72,6 +83,7 @@ export async function buildBackup(): Promise<KickoffBackup> {
     teams,
     matches,
     deletedMatches,
+    deletedTeams,
   };
 }
 
@@ -80,6 +92,7 @@ function summarize(backup: KickoffBackup): BackupSummary {
     teams: backup.teams.length,
     matches: backup.matches.length,
     deletedMatches: backup.deletedMatches.length,
+    deletedTeams: backup.deletedTeams?.length ?? 0,
   };
 }
 
@@ -198,23 +211,31 @@ export async function pickAndImportBackup(mode: ImportMode): Promise<BackupSumma
     throw new Error('That file is not a valid Kickoff backup.');
   }
 
+  const incomingDeletedTeams = parsed.deletedTeams ?? [];
+
   if (mode === 'replace') {
     await replaceAllCreatedTeams(parsed.teams);
     await replaceAllMatchFixtures(parsed.matches);
     await replaceAllDeletedMatchFixtures(parsed.deletedMatches);
+    await replaceAllDeletedCreatedTeams(incomingDeletedTeams);
     return summarize(parsed);
   }
 
-  const [existingTeams, existingMatches, existingDeletedMatches] = await Promise.all([
-    getCreatedTeams(),
-    getMatchFixtures(),
-    getDeletedMatchFixtures(),
-  ]);
+  const [existingTeams, existingMatches, existingDeletedMatches, existingDeletedTeams] =
+    await Promise.all([
+      getCreatedTeams(),
+      getMatchFixtures(),
+      getDeletedMatchFixtures(),
+      getDeletedCreatedTeams(),
+    ]);
 
   await replaceAllCreatedTeams(mergeById(existingTeams, parsed.teams, (team) => team.id));
   await replaceAllMatchFixtures(mergeById(existingMatches, parsed.matches, (match) => match.id));
   await replaceAllDeletedMatchFixtures(
     mergeById(existingDeletedMatches, parsed.deletedMatches, (item) => item.match.id),
+  );
+  await replaceAllDeletedCreatedTeams(
+    mergeById(existingDeletedTeams, incomingDeletedTeams, (item) => item.team.id),
   );
 
   return summarize(parsed);

@@ -10,7 +10,14 @@ export type CreatedTeam = {
   lineup: Record<string, string>;
 };
 
+export type DeletedCreatedTeam = {
+  team: CreatedTeam;
+  deletedAt: number;
+};
+
 const CREATED_TEAMS_STORAGE_KEY = '@kickoff/created-teams';
+const DELETED_TEAMS_STORAGE_KEY = '@kickoff/deleted-teams';
+export const DELETED_TEAM_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 function isTeamPlayer(value: unknown): value is CreatedTeam['roster'][number] {
   if (typeof value !== 'object' || value === null) return false;
@@ -42,6 +49,17 @@ export function isCreatedTeam(value: unknown): value is CreatedTeam {
   return (
     team.roster.every(isTeamPlayer) &&
     Object.values(team.lineup).every((playerName) => typeof playerName === 'string')
+  );
+}
+
+export function isDeletedCreatedTeam(value: unknown): value is DeletedCreatedTeam {
+  if (typeof value !== 'object' || value === null) return false;
+  const deletedTeam = value as Record<string, unknown>;
+  return (
+    typeof deletedTeam.deletedAt === 'number' &&
+    Number.isFinite(deletedTeam.deletedAt) &&
+    deletedTeam.deletedAt >= 0 &&
+    isCreatedTeam(deletedTeam.team)
   );
 }
 
@@ -82,6 +100,78 @@ export async function deleteCreatedTeam(teamId: string): Promise<void> {
     throw new Error('This team could not be found. Refresh the Teams screen and try again.');
   }
   await AsyncStorage.setItem(CREATED_TEAMS_STORAGE_KEY, JSON.stringify(updatedTeams));
+}
+
+async function readDeletedCreatedTeams(): Promise<DeletedCreatedTeam[]> {
+  const serializedDeletedTeams = await AsyncStorage.getItem(DELETED_TEAMS_STORAGE_KEY);
+  if (serializedDeletedTeams === null) return [];
+
+  const deletedTeams: unknown = JSON.parse(serializedDeletedTeams);
+  if (!Array.isArray(deletedTeams) || !deletedTeams.every(isDeletedCreatedTeam)) {
+    throw new Error('Deleted team data is invalid. Clear the app storage and try again.');
+  }
+  return deletedTeams;
+}
+
+export async function getDeletedCreatedTeams(): Promise<DeletedCreatedTeam[]> {
+  const deletedTeams = await readDeletedCreatedTeams();
+  const unexpiredTeams = deletedTeams.filter(
+    (deletedTeam) => deletedTeam.deletedAt + DELETED_TEAM_RETENTION_MS > Date.now(),
+  );
+  if (unexpiredTeams.length !== deletedTeams.length) {
+    await AsyncStorage.setItem(DELETED_TEAMS_STORAGE_KEY, JSON.stringify(unexpiredTeams));
+  }
+  return unexpiredTeams;
+}
+
+/** Moves a team into the 30-day recoverable trash instead of deleting it outright. */
+export async function softDeleteCreatedTeam(teamId: string): Promise<void> {
+  const savedTeams = await getCreatedTeams();
+  const teamToDelete = savedTeams.find((team) => team.id === teamId);
+  if (!teamToDelete) return;
+
+  const deletedTeams = await getDeletedCreatedTeams();
+  const nextDeletedTeams = [
+    ...deletedTeams.filter((deletedTeam) => deletedTeam.team.id !== teamId),
+    { team: teamToDelete, deletedAt: Date.now() },
+  ];
+  await AsyncStorage.setItem(DELETED_TEAMS_STORAGE_KEY, JSON.stringify(nextDeletedTeams));
+  await AsyncStorage.setItem(
+    CREATED_TEAMS_STORAGE_KEY,
+    JSON.stringify(savedTeams.filter((team) => team.id !== teamId)),
+  );
+}
+
+export async function restoreDeletedCreatedTeam(teamId: string): Promise<boolean> {
+  const deletedTeams = await getDeletedCreatedTeams();
+  const deletedTeam = deletedTeams.find((item) => item.team.id === teamId);
+  if (!deletedTeam) return false;
+
+  const savedTeams = await getCreatedTeams();
+  await AsyncStorage.setItem(
+    CREATED_TEAMS_STORAGE_KEY,
+    JSON.stringify([...savedTeams.filter((team) => team.id !== teamId), deletedTeam.team]),
+  );
+  await AsyncStorage.setItem(
+    DELETED_TEAMS_STORAGE_KEY,
+    JSON.stringify(deletedTeams.filter((item) => item.team.id !== teamId)),
+  );
+  return true;
+}
+
+export async function permanentlyDeleteCreatedTeam(teamId: string): Promise<void> {
+  const deletedTeams = await getDeletedCreatedTeams();
+  await AsyncStorage.setItem(
+    DELETED_TEAMS_STORAGE_KEY,
+    JSON.stringify(deletedTeams.filter((item) => item.team.id !== teamId)),
+  );
+}
+
+/** Overwrites the entire deleted-teams list. Used by backup import. */
+export async function replaceAllDeletedCreatedTeams(
+  deletedTeams: DeletedCreatedTeam[],
+): Promise<void> {
+  await AsyncStorage.setItem(DELETED_TEAMS_STORAGE_KEY, JSON.stringify(deletedTeams));
 }
 
 /** Overwrites the entire saved-teams list. Used by backup import. */

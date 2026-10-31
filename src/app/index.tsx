@@ -163,7 +163,7 @@ export default function HomeScreen() {
         await loadMatches();
         Alert.alert(
           'Import complete',
-          `Restored ${summary.teams} ${summary.teams === 1 ? 'team' : 'teams'}, ${summary.matches} ${summary.matches === 1 ? 'match' : 'matches'}, and ${summary.deletedMatches} deleted ${summary.deletedMatches === 1 ? 'match' : 'matches'} from the backup.`,
+          `Restored ${summary.teams} ${summary.teams === 1 ? 'team' : 'teams'} and ${summary.matches} ${summary.matches === 1 ? 'match' : 'matches'} from the backup, plus ${summary.deletedMatches + summary.deletedTeams} item${summary.deletedMatches + summary.deletedTeams === 1 ? '' : 's'} still in Recently deleted.`,
         );
       }
     } catch (importError) {
