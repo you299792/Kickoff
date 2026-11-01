@@ -3,6 +3,7 @@ import { Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View }
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AnimatedPressable } from '@/components/animated-pressable';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -357,32 +358,26 @@ export default function HomeScreen() {
           </ThemedView>
 
           <View style={styles.quickActionsRow}>
-            <Pressable
+            <AnimatedPressable
               accessibilityRole="button"
               onPress={() => router.push('/deleted-matches')}
-              style={({ pressed }) => [
-                styles.quickActionButton,
-                pressed && styles.chipPressed,
-              ]}>
+              style={styles.quickActionButton}>
               <ThemedText style={styles.deletedMatchesButtonText} numberOfLines={1}>
                 Recently deleted
               </ThemedText>
-            </Pressable>
+            </AnimatedPressable>
 
-            <Pressable
+            <AnimatedPressable
               accessibilityRole="button"
               onPress={() => {
                 setBackupError('');
                 setBackupModalVisible(true);
               }}
-              style={({ pressed }) => [
-                styles.quickActionButton,
-                pressed && styles.chipPressed,
-              ]}>
+              style={styles.quickActionButton}>
               <ThemedText style={styles.backupButtonText} numberOfLines={1}>
                 Backup &amp; restore
               </ThemedText>
-            </Pressable>
+            </AnimatedPressable>
           </View>
 
           {upcomingMatches.length > 0 || fixturesError ? (
@@ -399,8 +394,9 @@ export default function HomeScreen() {
                 <ThemedText style={styles.fixturesError}>{fixturesError}</ThemedText>
               ) : null}
               {upcomingMatches.map((match) => (
-                <Pressable
+                <AnimatedPressable
                   key={match.id}
+                  scaleTo={0.985}
                   accessibilityRole="button"
                   accessibilityLabel={`Hold to delete match between ${match.homeTeam.name} and ${match.awayTeam.name}`}
                   accessibilityHint="Long press to show match actions"
@@ -408,8 +404,7 @@ export default function HomeScreen() {
                   onLongPress={() => {
                     longPressedMatchId.current = match.id;
                     setMatchActionsTarget(match);
-                  }}
-                  style={({ pressed }) => [pressed && styles.cardPressed]}>
+                  }}>
                   <ThemedView type="backgroundElement" style={styles.upcomingCard}>
                   <View style={styles.upcomingTeams}>
                     {[match.homeTeam, match.awayTeam].map((team, index) => (
@@ -434,21 +429,18 @@ export default function HomeScreen() {
                     {[match.competition, match.date, match.venue].filter(Boolean).join(' · ')}
                   </ThemedText>
                   <View style={styles.upcomingActions}>
-                    <Pressable
+                    <AnimatedPressable
                       accessibilityRole="button"
                       accessibilityLabel={`${match.status === 'in-progress' ? 'Resume' : 'Open'} match between ${match.homeTeam.name} and ${match.awayTeam.name}`}
                       onPress={() => openMatch(match.id)}
-                      style={({ pressed }) => [
-                        styles.upcomingAction,
-                        pressed && styles.chipPressed,
-                      ]}>
+                      style={styles.upcomingAction}>
                       <ThemedText style={styles.upcomingActionText}>
                         {match.status === 'in-progress' ? 'Resume match' : 'Start match'}
                       </ThemedText>
-                    </Pressable>
+                    </AnimatedPressable>
                   </View>
                   </ThemedView>
-                </Pressable>
+                </AnimatedPressable>
               ))}
             </View>
           ) : null}
@@ -468,16 +460,13 @@ export default function HomeScreen() {
               const count = matchHistory.filter((match) => matchesFilter(match, item.key)).length;
 
               return (
-                <Pressable
+                <AnimatedPressable
                   key={item.key}
+                  scaleTo={0.94}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
                   onPress={() => setFilter(item.key)}
-                  style={({ pressed }) => [
-                    styles.chip,
-                    isActive && styles.chipActive,
-                    pressed && styles.chipPressed,
-                  ]}>
+                  style={[styles.chip, isActive && styles.chipActive]}>
                   <ThemedText
                     type="small"
                     style={[styles.chipText, isActive && styles.chipTextActive]}>
@@ -488,7 +477,7 @@ export default function HomeScreen() {
                     style={[styles.chipCount, isActive && styles.chipTextActive]}>
                     {count}
                   </ThemedText>
-                </Pressable>
+                </AnimatedPressable>
               );
             })}
           </View>
@@ -504,7 +493,8 @@ export default function HomeScreen() {
 
               return (
                 <View key={match.id} style={styles.matchHistoryEntry}>
-                  <Pressable
+                  <AnimatedPressable
+                    scaleTo={0.985}
                     accessibilityRole="button"
                     accessibilityLabel={`View details: ${match.homeTeam} ${match.homeGoals}, ${match.awayTeam} ${match.awayGoals}`}
                     accessibilityHint="Long press to show match actions"
@@ -532,8 +522,7 @@ export default function HomeScreen() {
                           longPressedMatchId.current = null;
                         }
                       }, 350);
-                    }}
-                    style={({ pressed }) => [pressed && styles.cardPressed]}>
+                    }}>
                     <ThemedView type="backgroundElement" style={styles.matchCard}>
                     <View style={styles.cardTopRow}>
                       <View style={styles.cardMeta}>
@@ -638,7 +627,7 @@ export default function HomeScreen() {
                       <ThemedText style={styles.viewDetailsText}>View match details ›</ThemedText>
                     </View>
                     </ThemedView>
-                  </Pressable>
+                  </AnimatedPressable>
                 </View>
               );
             })}
@@ -656,20 +645,17 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
 
-        <Pressable
+        <AnimatedPressable
+          scaleTo={0.93}
           accessibilityLabel="Add new match"
           accessibilityRole="button"
           onPress={handleAddMatch}
-          style={({ pressed }) => [
-            styles.addButton,
-            { bottom: + insets.bottom },
-            pressed && styles.addButtonPressed,
-          ]}>
+          style={[styles.addButton, { bottom: insets.bottom }]}>
           <View style={styles.addButtonIcon}>
             <ThemedText style={styles.addButtonIconText}>+</ThemedText>
           </View>
           <ThemedText style={styles.addButtonText}>New match</ThemedText>
-        </Pressable>
+        </AnimatedPressable>
         <Modal
           visible={matchActionsTarget !== null}
           transparent
@@ -688,29 +674,25 @@ export default function HomeScreen() {
                 <ThemedText type="small" themeColor="textSecondary" style={styles.actionSubtitle}>
                   {matchActionsTarget.homeTeam.name} vs {matchActionsTarget.awayTeam.name}
                 </ThemedText>
-                <Pressable
+                <AnimatedPressable
                   accessibilityRole="button"
                   accessibilityLabel="Delete this match"
                   disabled={deletingMatchId !== null}
                   onPress={() => confirmDeleteMatch(matchActionsTarget)}
-                  style={({ pressed }) => [
+                  style={[
                     styles.overlayDeleteButton,
-                    pressed && styles.chipPressed,
                     deletingMatchId !== null && styles.disabled,
                   ]}>
                   <ThemedText style={styles.overlayDeleteText}>
                     Delete Match
                   </ThemedText>
-                </Pressable>
-                <Pressable
+                </AnimatedPressable>
+                <AnimatedPressable
                   accessibilityRole="button"
                   onPress={() => setMatchActionsTarget(null)}
-                  style={({ pressed }) => [
-                    styles.overlayCancelButton,
-                    pressed && styles.chipPressed,
-                  ]}>
+                  style={styles.overlayCancelButton}>
                   <ThemedText style={styles.overlayCancelText}>Cancel</ThemedText>
-                </Pressable>
+                </AnimatedPressable>
               </ThemedView>
             ) : null}
           </View>
@@ -735,57 +717,51 @@ export default function HomeScreen() {
               {backupError ? (
                 <ThemedText style={styles.backupErrorText}>{backupError}</ThemedText>
               ) : null}
-              <Pressable
+              <AnimatedPressable
                 accessibilityRole="button"
                 accessibilityLabel="Save a backup file to this device"
                 disabled={exportingBackupAction !== null || isImportingBackup}
                 onPress={() => void handleSaveBackup()}
-                style={({ pressed }) => [
+                style={[
                   styles.backupActionButton,
-                  pressed && styles.chipPressed,
                   (exportingBackupAction !== null || isImportingBackup) && styles.disabled,
                 ]}>
                 <ThemedText style={styles.backupActionButtonText}>
                   {exportingBackupAction === 'save' ? 'Saving…' : 'Save to device'}
                 </ThemedText>
-              </Pressable>
-              <Pressable
+              </AnimatedPressable>
+              <AnimatedPressable
                 accessibilityRole="button"
                 accessibilityLabel="Share a backup file"
                 disabled={exportingBackupAction !== null || isImportingBackup}
                 onPress={() => void handleShareBackup()}
-                style={({ pressed }) => [
+                style={[
                   styles.backupActionButtonSecondary,
-                  pressed && styles.chipPressed,
                   (exportingBackupAction !== null || isImportingBackup) && styles.disabled,
                 ]}>
                 <ThemedText style={styles.backupActionButtonSecondaryText}>
                   {exportingBackupAction === 'share' ? 'Sharing…' : 'Share backup'}
                 </ThemedText>
-              </Pressable>
-              <Pressable
+              </AnimatedPressable>
+              <AnimatedPressable
                 accessibilityRole="button"
                 accessibilityLabel="Import a backup file"
                 disabled={exportingBackupAction !== null || isImportingBackup}
                 onPress={confirmImportBackup}
-                style={({ pressed }) => [
+                style={[
                   styles.backupActionButtonSecondary,
-                  pressed && styles.chipPressed,
                   (exportingBackupAction !== null || isImportingBackup) && styles.disabled,
                 ]}>
                 <ThemedText style={styles.backupActionButtonSecondaryText}>
                   {isImportingBackup ? 'Importing…' : 'Import backup'}
                 </ThemedText>
-              </Pressable>
-              <Pressable
+              </AnimatedPressable>
+              <AnimatedPressable
                 accessibilityRole="button"
                 onPress={() => setBackupModalVisible(false)}
-                style={({ pressed }) => [
-                  styles.overlayCancelButton,
-                  pressed && styles.chipPressed,
-                ]}>
+                style={styles.overlayCancelButton}>
                 <ThemedText style={styles.overlayCancelText}>Close</ThemedText>
-              </Pressable>
+              </AnimatedPressable>
             </ThemedView>
           </View>
         </Modal>
@@ -969,9 +945,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#1f7a4d',
     borderColor: '#1f7a4d',
   },
-  chipPressed: {
-    opacity: 0.75,
-  },
   disabled: { opacity: 0.5 },
   chipText: {
     fontWeight: '600',
@@ -1000,7 +973,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  cardPressed: { opacity: 0.75 },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1176,10 +1148,6 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
     elevation: 12,
-  },
-  addButtonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.97 }],
   },
   addButtonIcon: {
     width: 40,
