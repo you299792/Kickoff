@@ -132,6 +132,8 @@ export default function NewMatchScreen() {
     useCallback(() => {
       let isActive = true;
 
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+
       if (isFormDirtyRef.current) {
         Alert.alert(
           'Continue your new match?',
