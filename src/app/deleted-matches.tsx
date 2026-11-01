@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInUp, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp, FadeOut, LinearTransition, ZoomIn } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/animated-pressable';
 import { ThemedText } from '@/components/themed-text';
@@ -122,7 +122,11 @@ export default function DeletedMatchesScreen() {
             </ThemedText>
           </Animated.View>
 
-          {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
+          {error ? (
+            <Animated.View entering={FadeIn.duration(200)}>
+              <ThemedText style={styles.errorText}>{error}</ThemedText>
+            </Animated.View>
+          ) : null}
 
           {deletedMatches.length > 0 ? (
             <View style={styles.matchList}>
@@ -137,6 +141,7 @@ export default function DeletedMatchesScreen() {
                   <Animated.View
                     key={match.id}
                     entering={FadeInUp.delay(Math.min(matchIndex, 8) * 60).duration(300)}
+                    exiting={FadeOut.duration(200)}
                     layout={LinearTransition.duration(220)}>
                   <ThemedView
                     type="backgroundElement"
@@ -144,11 +149,15 @@ export default function DeletedMatchesScreen() {
                     <View style={styles.teamsRow}>
                       {[match.homeTeam, match.awayTeam].map((team, index) => (
                         <View key={team.id} style={styles.team}>
-                          <View style={[styles.badge, { backgroundColor: team.color }]}>
+                          <Animated.View
+                            entering={ZoomIn.delay(
+                              Math.min(matchIndex, 8) * 60 + index * 40 + 80,
+                            ).duration(220)}
+                            style={[styles.badge, { backgroundColor: team.color }]}>
                             <ThemedText style={styles.badgeText}>
                               {team.name.slice(0, 2).toUpperCase()}
                             </ThemedText>
-                          </View>
+                          </Animated.View>
                           <ThemedText style={styles.teamName} numberOfLines={1}>
                             {team.name}
                           </ThemedText>

@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeIn, FadeInUp, FadeOut, LinearTransition, ZoomIn } from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/animated-pressable';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -111,30 +113,36 @@ export default function DeletedTeamsScreen() {
   }
 
   return (
+    <Animated.View entering={FadeIn.duration(280)} style={styles.screenEntrance}>
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Pressable
+          <AnimatedPressable
+            scaleTo={0.94}
             accessibilityRole="button"
             accessibilityLabel="Back to teams"
             onPress={() => router.replace('/teams')}
-            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
+            style={styles.backButton}>
             <ThemedText themeColor="textSecondary" style={styles.backText}>‹</ThemedText>
             <ThemedText themeColor="textSecondary">Teams</ThemedText>
-          </Pressable>
+          </AnimatedPressable>
 
-          <View style={styles.header}>
+          <Animated.View entering={FadeInUp.duration(300)} style={styles.header}>
             <ThemedText type="title" style={styles.title}>Recently deleted</ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={styles.subtitle}>
               Teams are permanently deleted 30 days after they are moved here.
             </ThemedText>
-          </View>
+          </Animated.View>
 
-          {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
+          {error ? (
+            <Animated.View entering={FadeIn.duration(200)}>
+              <ThemedText style={styles.errorText}>{error}</ThemedText>
+            </Animated.View>
+          ) : null}
 
           {deletedTeams.length > 0 ? (
             <View style={styles.teamList}>
-              {deletedTeams.map((deletedTeam) => {
+              {deletedTeams.map((deletedTeam, teamIndex) => {
                 const team = deletedTeam.team;
                 const expiresAt = deletedTeam.deletedAt + DELETED_TEAM_RETENTION_MS;
                 const daysRemaining = Math.max(
@@ -142,9 +150,15 @@ export default function DeletedTeamsScreen() {
                   Math.ceil((expiresAt - now) / (24 * 60 * 60 * 1000)),
                 );
                 return (
-                  <ThemedView key={team.id} type="backgroundElement" style={styles.teamCard}>
+                  <Animated.View
+                    key={team.id}
+                    entering={FadeInUp.delay(Math.min(teamIndex, 8) * 60).duration(300)}
+                    exiting={FadeOut.duration(200)}
+                    layout={LinearTransition.duration(220)}>
+                  <ThemedView type="backgroundElement" style={styles.teamCard}>
                     <View style={styles.teamRow}>
-                      <View
+                      <Animated.View
+                        entering={ZoomIn.delay(Math.min(teamIndex, 8) * 60 + 80).duration(220)}
                         style={[
                           styles.badge,
                           {
@@ -157,7 +171,7 @@ export default function DeletedTeamsScreen() {
                           style={[styles.badgeText, { color: getContrastTextColor(team.color) }]}>
                           {initials(team.name)}
                         </ThemedText>
-                      </View>
+                      </Animated.View>
                       <View style={styles.teamInfo}>
                         <ThemedText style={styles.teamName} numberOfLines={1}>
                           {team.name}
@@ -175,38 +189,35 @@ export default function DeletedTeamsScreen() {
                       Expires {new Date(expiresAt).toLocaleDateString()}
                     </ThemedText>
                     <View style={styles.actions}>
-                      <Pressable
+                      <AnimatedPressable
                         accessibilityRole="button"
                         accessibilityLabel={`Restore ${team.name}`}
                         disabled={busyTeamId !== null}
                         onPress={() => void restoreTeam(team.id)}
-                        style={({ pressed }) => [
-                          styles.restoreButton,
-                          pressed && styles.pressed,
-                          busyTeamId !== null && styles.disabled,
-                        ]}>
+                        style={[styles.restoreButton, busyTeamId !== null && styles.disabled]}>
                         <ThemedText style={styles.restoreButtonText}>Restore</ThemedText>
-                      </Pressable>
-                      <Pressable
+                      </AnimatedPressable>
+                      <AnimatedPressable
                         accessibilityRole="button"
                         accessibilityLabel={`Permanently delete ${team.name}`}
                         disabled={busyTeamId !== null}
                         onPress={() => confirmPermanentDelete(deletedTeam)}
-                        style={({ pressed }) => [
+                        style={[
                           styles.permanentDeleteButton,
-                          pressed && styles.pressed,
                           busyTeamId !== null && styles.disabled,
                         ]}>
                         <ThemedText style={styles.permanentDeleteText}>Delete permanently</ThemedText>
-                      </Pressable>
+                      </AnimatedPressable>
                     </View>
                   </ThemedView>
+                  </Animated.View>
                 );
               })}
             </View>
           ) : isLoading ? (
             <ThemedText themeColor="textSecondary">Loading deleted teams…</ThemedText>
           ) : !error ? (
+            <Animated.View entering={FadeIn.duration(260)}>
             <ThemedView type="backgroundElement" style={styles.emptyState}>
               <ThemedText type="subtitle" style={styles.emptyTitle}>Trash is empty</ThemedText>
               <ThemedText type="small" themeColor="textSecondary" style={styles.emptyBody}>
@@ -214,14 +225,17 @@ export default function DeletedTeamsScreen() {
                 expire.
               </ThemedText>
             </ThemedView>
+            </Animated.View>
           ) : null}
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenEntrance: { flex: 1 },
   container: { flex: 1 },
   safeArea: {
     flex: 1,
@@ -242,7 +256,6 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   backText: { fontSize: 22, lineHeight: 24 },
-  pressed: { opacity: 0.65 },
   header: { marginTop: Spacing.two, marginBottom: Spacing.three, gap: Spacing.one },
   title: { fontSize: 32, lineHeight: 38, fontWeight: '800' },
   subtitle: { lineHeight: 19 },
