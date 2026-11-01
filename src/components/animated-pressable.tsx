@@ -1,5 +1,5 @@
-import { forwardRef } from 'react';
-import { Pressable, type PressableProps, type StyleProp, type View, type ViewStyle } from 'react-native';
+import { forwardRef, type ComponentRef } from 'react';
+import { Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   type AnimatedStyle,
   useAnimatedStyle,
@@ -22,7 +22,7 @@ type AnimatedPressableProps = Omit<PressableProps, 'style'> & {
  * itself (no wrapper View) so layout props like flex/width still work when
  * this sits inside a row of buttons.
  */
-export const AnimatedPressable = forwardRef<View, AnimatedPressableProps>(
+export const AnimatedPressable = forwardRef<ComponentRef<typeof ReanimatedPressable>, AnimatedPressableProps>(
   function AnimatedPressable(
     { style, scaleTo = 0.96, onPressIn, onPressOut, children, ...props },
     ref,

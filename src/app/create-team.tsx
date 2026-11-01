@@ -9,7 +9,17 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  FadeOut,
+  LinearTransition,
+  ZoomIn,
+} from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/animated-pressable';
+import { ChevronIcon } from '@/components/chevron-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -336,30 +346,32 @@ export default function CreateTeamScreen() {
   const captainPlayer = players.find((player) => player.id === captainId) ?? null;
 
   return (
+    <Animated.View entering={FadeIn.duration(280)} style={styles.screenEntrance}>
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Pressable
+          <AnimatedPressable
+            scaleTo={0.94}
             accessibilityRole="button"
             accessibilityLabel="Back to teams"
             onPress={() => router.back()}
-            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
+            style={[styles.backButton]}>
             <ThemedText themeColor="textSecondary" style={styles.backIcon}>
               {'<'}
             </ThemedText>
             <ThemedText themeColor="textSecondary" style={styles.backText}>
               Back to teams
             </ThemedText>
-          </Pressable>
+          </AnimatedPressable>
 
-          <View style={styles.header}>
+          <Animated.View entering={FadeInDown.duration(320)} style={styles.header}>
             <ThemedText type="title" style={styles.title}>
               {teamId ? 'Edit team' : 'Create a team'}
             </ThemedText>
             <ThemedText themeColor="textSecondary" style={styles.subtitle}>
               {teamId ? 'Update your team details, squad, and starting lineup.' : 'Set up a squad for your next match.'}
             </ThemedText>
-          </View>
+          </Animated.View>
 
           {isLoadingTeam ? (
             <ThemedText themeColor="textSecondary">Loading team…</ThemedText>
@@ -370,10 +382,13 @@ export default function CreateTeamScreen() {
           ) : (
           <>
           {saveError ? (
-            <ThemedText accessibilityRole="alert" style={styles.saveError}>
-              {saveError}
-            </ThemedText>
+            <Animated.View entering={FadeIn.duration(200)}>
+              <ThemedText accessibilityRole="alert" style={styles.saveError}>
+                {saveError}
+              </ThemedText>
+            </Animated.View>
           ) : null}
+          <Animated.View entering={FadeInDown.delay(60).duration(320)}>
           <ThemedView type="backgroundElement" style={styles.formCard}>
             <View style={styles.field}>
               <ThemedText style={styles.label}>Team name</ThemedText>
@@ -389,16 +404,15 @@ export default function CreateTeamScreen() {
 
             <View style={styles.field}>
               <ThemedText style={styles.label}>Captain</ThemedText>
-              <Pressable
+              <AnimatedPressable
                 accessibilityRole="button"
                 accessibilityLabel={
                   captainPlayer ? `Choose captain, currently ${captainPlayer.name}` : 'Choose captain'
                 }
                 disabled={eligibleCaptains.length === 0}
                 onPress={() => setShowCaptainPicker(true)}
-                style={({ pressed }) => [
+                style={[
                   styles.colorPickerButton,
-                  pressed && styles.pressed,
                   eligibleCaptains.length === 0 && styles.disabledControl,
                 ]}>
                 {captainPlayer ? (
@@ -423,7 +437,7 @@ export default function CreateTeamScreen() {
                 <ThemedText themeColor="textSecondary" style={styles.colorPickerChevron}>
                   ›
                 </ThemedText>
-              </Pressable>
+              </AnimatedPressable>
             </View>
 
             <View style={styles.field}>
@@ -440,11 +454,11 @@ export default function CreateTeamScreen() {
 
             <View style={styles.field}>
               <ThemedText style={styles.label}>Team color</ThemedText>
-              <Pressable
+              <AnimatedPressable
                 accessibilityRole="button"
                 accessibilityLabel={`Choose team color, currently ${teamColor}`}
                 onPress={() => setShowColorPalette(true)}
-                style={({ pressed }) => [styles.colorPickerButton, pressed && styles.pressed]}>
+                style={[styles.colorPickerButton]}>
                 <View style={[styles.selectedColorSwatch, { backgroundColor: teamColor }]} />
                 <View style={styles.colorPickerButtonTextGroup}>
                   <ThemedText style={styles.colorPickerButtonTitle}>Choose a color</ThemedText>
@@ -455,7 +469,7 @@ export default function CreateTeamScreen() {
                 <ThemedText themeColor="textSecondary" style={styles.colorPickerChevron}>
                   ›
                 </ThemedText>
-              </Pressable>
+              </AnimatedPressable>
             </View>
 
             <View style={styles.playersField}>
@@ -501,16 +515,15 @@ export default function CreateTeamScreen() {
               </ThemedText>
               <View style={styles.positionOptions}>
                 {STARTING_POSITIONS.map((position) => (
-                  <Pressable
+                  <AnimatedPressable
                     key={position.code}
                     accessibilityRole="radio"
                     accessibilityLabel={position.label}
                     accessibilityState={{ selected: playerPosition === position.code }}
                     onPress={() => setPlayerPosition(position.code)}
-                    style={({ pressed }) => [
+                    style={[
                       styles.positionOption,
                       playerPosition === position.code && styles.positionOptionSelected,
-                      pressed && styles.pressed,
                     ]}>
                     <ThemedText
                       style={[
@@ -527,45 +540,50 @@ export default function CreateTeamScreen() {
                       ]}>
                       {position.label}
                     </ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ))}
               </View>
-              <Pressable
+              <AnimatedPressable
                 accessibilityRole="button"
                 accessibilityLabel="Add player to squad"
                 disabled={!playerName.trim() || !playerPosition}
                 onPress={addPlayer}
-                style={({ pressed }) => [
+                style={[
                   styles.savePlayerButton,
                   (!playerName.trim() || !playerPosition) && styles.savePlayerButtonDisabled,
-                  pressed && styles.pressed,
                 ]}>
                 <ThemedText style={styles.savePlayerButtonText}>Add player</ThemedText>
-              </Pressable>
+              </AnimatedPressable>
 
               {players.length > 0 ? (
                 <View style={styles.playersList}>
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     accessibilityState={{ expanded: showPlayers }}
                     accessibilityLabel={`Saved players, ${players.length} total`}
                     onPress={() => setShowPlayers((current) => !current)}
-                    style={({ pressed }) => [styles.savedPlayersDropdown, pressed && styles.pressed]}>
+                    style={[styles.savedPlayersDropdown]}>
                     <View style={styles.savedPlayersHeading}>
                       <ThemedText style={styles.savedPlayersTitle}>Saved players</ThemedText>
                       <ThemedText themeColor="textSecondary" style={styles.savedPlayersCount}>
                         {players.length} {players.length === 1 ? 'player' : 'players'}
                       </ThemedText>
                     </View>
-                    <ThemedText themeColor="textSecondary" style={styles.savedPlayersChevron}>
-                      {showPlayers ? '⌃' : '⌄'}
-                    </ThemedText>
-                  </Pressable>
+                    <View style={styles.savedPlayersChevron}>
+                      <ChevronIcon expanded={showPlayers} color={colors.textSecondary} />
+                    </View>
+                  </AnimatedPressable>
                   {showPlayers ? (
-                    <View style={styles.savedPlayersList}>
-                      {players.map((player) => (
-                        <View
+                    <Animated.View
+                      entering={FadeIn.duration(200)}
+                      exiting={FadeOut.duration(140)}
+                      layout={LinearTransition.duration(220)}
+                      style={styles.savedPlayersList}>
+                      {players.map((player, playerIndex) => (
+                        <Animated.View
                           key={player.id}
+                          entering={FadeInUp.delay(Math.min(playerIndex, 8) * 40).duration(240)}
+                          layout={LinearTransition.duration(200)}
                           style={[
                             styles.savedPlayer,
                             editingPlayerId === player.id && styles.savedPlayerEditing,
@@ -590,54 +608,58 @@ export default function CreateTeamScreen() {
                               {player.position}
                             </ThemedText>
                           </View>
-                          <Pressable
+                          <AnimatedPressable
                             accessibilityRole="button"
                             accessibilityLabel={`Edit ${player.name}`}
                             onPress={() => startEditPlayer(player)}
                             hitSlop={8}
-                            style={({ pressed }) => [styles.editPlayer, pressed && styles.pressed]}>
+                            style={[styles.editPlayer]}>
                             <ThemedText style={styles.editPlayerText}>Edit</ThemedText>
-                          </Pressable>
-                          <Pressable
+                          </AnimatedPressable>
+                          <AnimatedPressable
                             accessibilityRole="button"
                             accessibilityLabel={`Remove ${player.name}`}
                             onPress={() => removePlayer(player.id)}
                             hitSlop={8}
-                            style={({ pressed }) => [
+                            style={[
                               styles.removePlayer,
-                              pressed && styles.pressed,
                             ]}>
                             <ThemedText style={styles.removePlayerText}>×</ThemedText>
-                          </Pressable>
-                        </View>
+                          </AnimatedPressable>
+                        </Animated.View>
                       ))}
-                    </View>
+                    </Animated.View>
                   ) : null}
                 </View>
               ) : null}
 
-              <Pressable
+              <AnimatedPressable
                 accessibilityRole="button"
                 accessibilityState={{ expanded: showLineup }}
                 onPress={() => setShowLineup((current) => !current)}
-                style={({ pressed }) => [
+                style={[
                   styles.lineupToggle,
                   showLineup && styles.lineupToggleActive,
-                  pressed && styles.pressed,
                 ]}>
                 <ThemedText style={styles.lineupToggleIcon}>⚽</ThemedText>
                 <ThemedText
                   style={[styles.lineupToggleText, showLineup && styles.lineupToggleTextActive]}>
                   {showLineup ? 'Hide starting lineup' : 'Set starting lineup on pitch'}
                 </ThemedText>
-                <ThemedText
-                  style={[styles.lineupToggleChevron, showLineup && styles.lineupToggleTextActive]}>
-                  {showLineup ? '⌃' : '⌄'}
-                </ThemedText>
-              </Pressable>
+                <View style={styles.lineupToggleChevron}>
+                  <ChevronIcon
+                    expanded={showLineup}
+                    color={showLineup ? '#ffffff' : '#1f7a4d'}
+                  />
+                </View>
+              </AnimatedPressable>
 
               {showLineup ? (
-                <View style={styles.lineupSection}>
+                <Animated.View
+                  entering={FadeIn.duration(220)}
+                  exiting={FadeOut.duration(150)}
+                  layout={LinearTransition.duration(220)}
+                  style={styles.lineupSection}>
                   <View style={styles.lineupHeader}>
                     <ThemedText style={styles.lineupTitle}>Starting lineup</ThemedText>
                     <ThemedText themeColor="textSecondary" style={styles.lineupFormation}>
@@ -658,43 +680,49 @@ export default function CreateTeamScreen() {
                         <View style={styles.pitchBottomGoal} />
                       </View>
                       <View style={styles.pitchPlayers}>
-                        {PITCH_ROWS.map((row) => (
+                        {PITCH_ROWS.map((row, rowIndex) => (
                           <View key={row.label} style={styles.pitchRow}>
-                            {row.slots.map((slot) => {
+                            {row.slots.map((slot, slotIndex) => {
                               const assignedPlayer = players.find(
                                 (player) => player.id === lineup[slot.id],
                               );
                               return (
-                                <Pressable
+                                <Animated.View
                                   key={slot.id}
-                                  accessibilityRole="button"
-                                  accessibilityLabel={
-                                    assignedPlayer
-                                      ? `${slot.label}, ${assignedPlayer.name || 'unnamed player'}`
-                                      : `Assign player to ${slot.label}`
-                                  }
-                                  onPress={() => setActivePitchSlot(slot)}
-                                  style={({ pressed }) => [
-                                    styles.pitchPlayer,
-                                    assignedPlayer && styles.pitchPlayerAssigned,
-                                    pressed && styles.pressed,
-                                  ]}>
-                                  <ThemedText
+                                  entering={ZoomIn.delay(
+                                    (rowIndex * 4 + slotIndex) * 35,
+                                  ).duration(240)}
+                                  layout={LinearTransition.duration(180)}>
+                                  <AnimatedPressable
+                                    scaleTo={0.92}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={
+                                      assignedPlayer
+                                        ? `${slot.label}, ${assignedPlayer.name || 'unnamed player'}`
+                                        : `Assign player to ${slot.label}`
+                                    }
+                                    onPress={() => setActivePitchSlot(slot)}
                                     style={[
-                                      styles.pitchPlayerCode,
-                                      assignedPlayer && styles.pitchPlayerTextAssigned,
+                                      styles.pitchPlayer,
+                                      assignedPlayer && styles.pitchPlayerAssigned,
                                     ]}>
-                                    {assignedPlayer ? assignedPlayer.number : slot.label}
-                                  </ThemedText>
-                                  <ThemedText
-                                    numberOfLines={1}
-                                    style={[
-                                      styles.pitchPlayerName,
-                                      assignedPlayer && styles.pitchPlayerTextAssigned,
-                                    ]}>
-                                    {assignedPlayer?.name || 'Add player'}
-                                  </ThemedText>
-                                </Pressable>
+                                    <ThemedText
+                                      style={[
+                                        styles.pitchPlayerCode,
+                                        assignedPlayer && styles.pitchPlayerTextAssigned,
+                                      ]}>
+                                      {assignedPlayer ? assignedPlayer.number : slot.label}
+                                    </ThemedText>
+                                    <ThemedText
+                                      numberOfLines={1}
+                                      style={[
+                                        styles.pitchPlayerName,
+                                        assignedPlayer && styles.pitchPlayerTextAssigned,
+                                      ]}>
+                                      {assignedPlayer?.name || 'Add player'}
+                                    </ThemedText>
+                                  </AnimatedPressable>
+                                </Animated.View>
                               );
                             })}
                           </View>
@@ -705,32 +733,32 @@ export default function CreateTeamScreen() {
                   <ThemedText themeColor="textSecondary" style={styles.lineupCount}>
                     {Object.keys(lineup).length} of 11 positions filled
                   </ThemedText>
-                </View>
+                </Animated.View>
               ) : null}
             </View>
           </ThemedView>
+          </Animated.View>
 
-          <View style={styles.saveTeamSection}>
+          <Animated.View entering={FadeInDown.delay(120).duration(320)} style={styles.saveTeamSection}>
             <ThemedText themeColor="textSecondary" style={styles.saveTeamHint}>
               {teamId
                 ? 'Save your changes to update this team.'
                 : 'Save your team and its squad to see it on the teams screen.'}
             </ThemedText>
-            <Pressable
+            <AnimatedPressable
               accessibilityRole="button"
               accessibilityLabel={teamId ? 'Save team changes' : 'Save team'}
               disabled={isSaving || isLoadingTeam || !teamName.trim()}
               onPress={() => void saveTeam()}
-              style={({ pressed }) => [
+              style={[
                 styles.saveTeamButton,
                 (isSaving || isLoadingTeam || !teamName.trim()) && styles.saveTeamButtonDisabled,
-                pressed && styles.pressed,
               ]}>
               <ThemedText style={styles.saveTeamButtonText}>
                 {isSaving ? 'Saving team…' : teamId ? 'Save changes' : 'Save team'}
               </ThemedText>
-            </Pressable>
-          </View>
+            </AnimatedPressable>
+          </Animated.View>
           </>
           )}
         </ScrollView>
@@ -746,56 +774,63 @@ export default function CreateTeamScreen() {
               onPress={() => setShowColorPalette(false)}
               style={StyleSheet.absoluteFill}
             />
-            <ThemedView type="backgroundElement" style={styles.colorPaletteModal}>
-              <View style={styles.colorPaletteHeader}>
-                <View style={styles.playerPickerHeading}>
-                  <ThemedText style={styles.playerPickerTitle}>Choose team color</ThemedText>
-                  <ThemedText themeColor="textSecondary" style={styles.playerPickerHint}>
-                    Select a color for your team badge.
+            <Animated.View
+              entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
+              exiting={FadeOut.duration(140)}>
+              <ThemedView type="backgroundElement" style={styles.colorPaletteModal}>
+                <View style={styles.colorPaletteHeader}>
+                  <View style={styles.playerPickerHeading}>
+                    <ThemedText style={styles.playerPickerTitle}>Choose team color</ThemedText>
+                    <ThemedText themeColor="textSecondary" style={styles.playerPickerHint}>
+                      Select a color for your team badge.
+                    </ThemedText>
+                  </View>
+                  <AnimatedPressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Close color palette"
+                    onPress={() => setShowColorPalette(false)}
+                    hitSlop={8}
+                    style={styles.playerPickerClose}>
+                    <ThemedText themeColor="textSecondary" style={styles.playerPickerCloseText}>
+                      ×
+                    </ThemedText>
+                  </AnimatedPressable>
+                </View>
+                <View style={styles.colorPaletteGrid}>
+                  {TEAM_COLOR_PALETTE.map((color, index) => {
+                    const selected = teamColor === color;
+                    return (
+                      <Animated.View key={color} entering={ZoomIn.delay(index * 12).duration(200)}>
+                        <AnimatedPressable
+                          scaleTo={0.85}
+                          accessibilityRole="radio"
+                          accessibilityLabel={`Color ${index + 1}${selected ? ', selected' : ''}`}
+                          accessibilityState={{ selected }}
+                          onPress={() => {
+                            setTeamColor(color);
+                            setShowColorPalette(false);
+                          }}
+                          style={[
+                            styles.colorPaletteOption,
+                            { backgroundColor: color },
+                            selected && styles.colorPaletteOptionSelected,
+                          ]}>
+                          {selected ? (
+                            <ThemedText style={styles.colorPaletteCheck}>✓</ThemedText>
+                          ) : null}
+                        </AnimatedPressable>
+                      </Animated.View>
+                    );
+                  })}
+                </View>
+                <View style={styles.colorPalettePreviewRow}>
+                  <View style={[styles.selectedColorSwatch, { backgroundColor: teamColor }]} />
+                  <ThemedText style={styles.colorPalettePreviewText}>
+                    Selected: {teamColor.toUpperCase()}
                   </ThemedText>
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Close color palette"
-                  onPress={() => setShowColorPalette(false)}
-                  hitSlop={8}
-                  style={styles.playerPickerClose}>
-                  <ThemedText themeColor="textSecondary" style={styles.playerPickerCloseText}>
-                    ×
-                  </ThemedText>
-                </Pressable>
-              </View>
-              <View style={styles.colorPaletteGrid}>
-                {TEAM_COLOR_PALETTE.map((color, index) => {
-                  const selected = teamColor === color;
-                  return (
-                    <Pressable
-                      key={color}
-                      accessibilityRole="radio"
-                      accessibilityLabel={`Color ${index + 1}${selected ? ', selected' : ''}`}
-                      accessibilityState={{ selected }}
-                      onPress={() => {
-                        setTeamColor(color);
-                        setShowColorPalette(false);
-                      }}
-                      style={({ pressed }) => [
-                        styles.colorPaletteOption,
-                        { backgroundColor: color },
-                        selected && styles.colorPaletteOptionSelected,
-                        pressed && styles.pressed,
-                      ]}>
-                      {selected ? <ThemedText style={styles.colorPaletteCheck}>✓</ThemedText> : null}
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <View style={styles.colorPalettePreviewRow}>
-                <View style={[styles.selectedColorSwatch, { backgroundColor: teamColor }]} />
-                <ThemedText style={styles.colorPalettePreviewText}>
-                  Selected: {teamColor.toUpperCase()}
-                </ThemedText>
-              </View>
-            </ThemedView>
+              </ThemedView>
+            </Animated.View>
           </View>
         </Modal>
         <Modal
@@ -810,75 +845,83 @@ export default function CreateTeamScreen() {
               onPress={() => setShowCaptainPicker(false)}
               style={StyleSheet.absoluteFill}
             />
-            <ThemedView type="backgroundElement" style={styles.colorPaletteModal}>
-              <View style={styles.colorPaletteHeader}>
-                <View style={styles.playerPickerHeading}>
-                  <ThemedText style={styles.playerPickerTitle}>Choose captain</ThemedText>
-                  <ThemedText themeColor="textSecondary" style={styles.playerPickerHint}>
-                    Pick the player who will lead this team.
-                  </ThemedText>
+            <Animated.View
+              entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
+              exiting={FadeOut.duration(140)}>
+              <ThemedView type="backgroundElement" style={styles.colorPaletteModal}>
+                <View style={styles.colorPaletteHeader}>
+                  <View style={styles.playerPickerHeading}>
+                    <ThemedText style={styles.playerPickerTitle}>Choose captain</ThemedText>
+                    <ThemedText themeColor="textSecondary" style={styles.playerPickerHint}>
+                      Pick the player who will lead this team.
+                    </ThemedText>
+                  </View>
+                  <AnimatedPressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Close captain selection"
+                    onPress={() => setShowCaptainPicker(false)}
+                    hitSlop={8}
+                    style={styles.playerPickerClose}>
+                    <ThemedText themeColor="textSecondary" style={styles.playerPickerCloseText}>
+                      ×
+                    </ThemedText>
+                  </AnimatedPressable>
                 </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Close captain selection"
-                  onPress={() => setShowCaptainPicker(false)}
-                  hitSlop={8}
-                  style={styles.playerPickerClose}>
-                  <ThemedText themeColor="textSecondary" style={styles.playerPickerCloseText}>
-                    ×
-                  </ThemedText>
-                </Pressable>
-              </View>
-              <ScrollView style={styles.playerPickerList} keyboardShouldPersistTaps="handled">
-                {eligibleCaptains.map((player) => {
-                  const selected = captainId === player.id;
-                  return (
-                    <Pressable
-                      key={player.id}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
-                      accessibilityLabel={`Make ${player.name} captain`}
-                      onPress={() => {
-                        setCaptainId(player.id);
-                        setShowCaptainPicker(false);
-                      }}
-                      style={({ pressed }) => [
-                        styles.playerPickerOption,
-                        pressed && styles.pressed,
-                      ]}>
-                      <View style={styles.playerPickerBadge}>
-                        <ThemedText style={styles.playerPickerBadgeText}>{player.number}</ThemedText>
-                      </View>
-                      <View style={styles.reservePlayerInfo}>
-                        <ThemedText style={styles.playerPickerName} numberOfLines={1}>
-                          {player.name.trim()}
-                        </ThemedText>
-                        <ThemedText themeColor="textSecondary" style={styles.playerPickerPosition}>
-                          {player.position}
-                        </ThemedText>
-                      </View>
-                      {selected ? <ThemedText style={styles.captainPickerCheck}>✓</ThemedText> : null}
-                    </Pressable>
-                  );
-                })}
-                {eligibleCaptains.length === 0 ? (
-                  <ThemedText themeColor="textSecondary" style={styles.playerPickerEmpty}>
-                    Add players to the squad before choosing a captain.
-                  </ThemedText>
+                <ScrollView style={styles.playerPickerList} keyboardShouldPersistTaps="handled">
+                  {eligibleCaptains.map((player, captainIndex) => {
+                    const selected = captainId === player.id;
+                    return (
+                      <Animated.View
+                        key={player.id}
+                        entering={FadeInUp.delay(Math.min(captainIndex, 10) * 35).duration(220)}>
+                        <AnimatedPressable
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={`Make ${player.name} captain`}
+                          onPress={() => {
+                            setCaptainId(player.id);
+                            setShowCaptainPicker(false);
+                          }}
+                          style={[
+                            styles.playerPickerOption,
+                          ]}>
+                          <View style={styles.playerPickerBadge}>
+                            <ThemedText style={styles.playerPickerBadgeText}>{player.number}</ThemedText>
+                          </View>
+                          <View style={styles.reservePlayerInfo}>
+                            <ThemedText style={styles.playerPickerName} numberOfLines={1}>
+                              {player.name.trim()}
+                            </ThemedText>
+                            <ThemedText themeColor="textSecondary" style={styles.playerPickerPosition}>
+                              {player.position}
+                            </ThemedText>
+                          </View>
+                          {selected ? (
+                            <ThemedText style={styles.captainPickerCheck}>✓</ThemedText>
+                          ) : null}
+                        </AnimatedPressable>
+                      </Animated.View>
+                    );
+                  })}
+                  {eligibleCaptains.length === 0 ? (
+                    <ThemedText themeColor="textSecondary" style={styles.playerPickerEmpty}>
+                      Add players to the squad before choosing a captain.
+                    </ThemedText>
+                  ) : null}
+                </ScrollView>
+                {captainId !== null ? (
+                  <AnimatedPressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      setCaptainId(null);
+                      setShowCaptainPicker(false);
+                    }}
+                    style={[styles.clearAssignment]}>
+                    <ThemedText style={styles.clearAssignmentText}>Clear captain</ThemedText>
+                  </AnimatedPressable>
                 ) : null}
-              </ScrollView>
-              {captainId !== null ? (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={() => {
-                    setCaptainId(null);
-                    setShowCaptainPicker(false);
-                  }}
-                  style={({ pressed }) => [styles.clearAssignment, pressed && styles.pressed]}>
-                  <ThemedText style={styles.clearAssignmentText}>Clear captain</ThemedText>
-                </Pressable>
-              ) : null}
-            </ThemedView>
+              </ThemedView>
+            </Animated.View>
           </View>
         </Modal>
         <Modal
@@ -893,6 +936,9 @@ export default function CreateTeamScreen() {
               onPress={cancelEditPlayer}
               style={StyleSheet.absoluteFill}
             />
+            <Animated.View
+              entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
+              exiting={FadeOut.duration(140)}>
             <ThemedView type="backgroundElement" style={styles.editPlayerModal}>
               <View style={styles.colorPaletteHeader}>
                 <View style={styles.playerPickerHeading}>
@@ -901,7 +947,7 @@ export default function CreateTeamScreen() {
                     Update their shirt number, name, and position.
                   </ThemedText>
                 </View>
-                <Pressable
+                <AnimatedPressable
                   accessibilityRole="button"
                   accessibilityLabel="Close player editor"
                   onPress={cancelEditPlayer}
@@ -910,7 +956,7 @@ export default function CreateTeamScreen() {
                   <ThemedText themeColor="textSecondary" style={styles.playerPickerCloseText}>
                     ×
                   </ThemedText>
-                </Pressable>
+                </AnimatedPressable>
               </View>
 
               <View style={styles.addPlayerRow}>
@@ -943,16 +989,15 @@ export default function CreateTeamScreen() {
               </ThemedText>
               <View style={styles.positionOptions}>
                 {STARTING_POSITIONS.map((position) => (
-                  <Pressable
+                  <AnimatedPressable
                     key={position.code}
                     accessibilityRole="radio"
                     accessibilityLabel={position.label}
                     accessibilityState={{ selected: editPlayerPosition === position.code }}
                     onPress={() => setEditPlayerPosition(position.code)}
-                    style={({ pressed }) => [
+                    style={[
                       styles.positionOption,
                       editPlayerPosition === position.code && styles.positionOptionSelected,
-                      pressed && styles.pressed,
                     ]}>
                     <ThemedText
                       style={[
@@ -969,33 +1014,33 @@ export default function CreateTeamScreen() {
                       ]}>
                       {position.label}
                     </ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ))}
               </View>
 
               <View style={styles.editPlayerActions}>
-                <Pressable
+                <AnimatedPressable
                   accessibilityRole="button"
                   accessibilityLabel="Cancel editing player"
                   onPress={cancelEditPlayer}
-                  style={({ pressed }) => [styles.cancelEditButton, pressed && styles.pressed]}>
+                  style={[styles.cancelEditButton]}>
                   <ThemedText style={styles.cancelEditButtonText}>Cancel</ThemedText>
-                </Pressable>
-                <Pressable
+                </AnimatedPressable>
+                <AnimatedPressable
                   accessibilityRole="button"
                   accessibilityLabel="Save player changes"
                   disabled={!editPlayerName.trim() || !editPlayerPosition}
                   onPress={saveEditedPlayer}
-                  style={({ pressed }) => [
+                  style={[
                     styles.savePlayerButton,
                     styles.editPlayerSaveButton,
                     (!editPlayerName.trim() || !editPlayerPosition) && styles.savePlayerButtonDisabled,
-                    pressed && styles.pressed,
                   ]}>
                   <ThemedText style={styles.savePlayerButtonText}>Save changes</ThemedText>
-                </Pressable>
+                </AnimatedPressable>
               </View>
             </ThemedView>
+            </Animated.View>
           </View>
         </Modal>
         <Modal
@@ -1010,6 +1055,9 @@ export default function CreateTeamScreen() {
               onPress={() => setActivePitchSlot(null)}
               style={StyleSheet.absoluteFill}
             />
+            <Animated.View
+              entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
+              exiting={FadeOut.duration(140)}>
             <ThemedView type="backgroundElement" style={styles.playerPicker}>
               <View style={styles.playerPickerHeader}>
                 <View style={styles.playerPickerHeading}>
@@ -1024,7 +1072,7 @@ export default function CreateTeamScreen() {
                       : 'Choose a reserve player for this position.'}
                   </ThemedText>
                 </View>
-                <Pressable
+                <AnimatedPressable
                   accessibilityRole="button"
                   accessibilityLabel="Close player selection"
                   onPress={() => setActivePitchSlot(null)}
@@ -1033,7 +1081,7 @@ export default function CreateTeamScreen() {
                   <ThemedText themeColor="textSecondary" style={styles.playerPickerCloseText}>
                     ×
                   </ThemedText>
-                </Pressable>
+                </AnimatedPressable>
               </View>
               {activeStarter ? (
                 <View style={styles.currentStarterCard}>
@@ -1050,16 +1098,15 @@ export default function CreateTeamScreen() {
                       Current starter · {activeStarter.position}
                     </ThemedText>
                   </View>
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     accessibilityLabel={`Keep ${activeStarter.name} in this position`}
                     onPress={() => assignPlayerToSlot(activeStarter.id)}
-                    style={({ pressed }) => [
+                    style={[
                       styles.keepStarterButton,
-                      pressed && styles.pressed,
                     ]}>
                     <ThemedText style={styles.keepStarterText}>Keep</ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 </View>
               ) : null}
               <View style={styles.reservePickerHeader}>
@@ -1069,15 +1116,16 @@ export default function CreateTeamScreen() {
                 </ThemedText>
               </View>
               <ScrollView style={styles.playerPickerList} keyboardShouldPersistTaps="handled">
-                {reservePlayers.map((player) => (
-                    <Pressable
-                      key={player.id}
+                {reservePlayers.map((player, reserveIndex) => (
+                  <Animated.View
+                    key={player.id}
+                    entering={FadeInUp.delay(Math.min(reserveIndex, 10) * 35).duration(220)}>
+                    <AnimatedPressable
                       accessibilityRole="button"
                       accessibilityLabel={`Replace current starter with ${player.name.trim()}, ${player.position}`}
                       onPress={() => assignPlayerToSlot(player.id)}
-                      style={({ pressed }) => [
+                      style={[
                         styles.playerPickerOption,
-                        pressed && styles.pressed,
                       ]}>
                       <View style={styles.playerPickerBadge}>
                         <ThemedText style={styles.playerPickerBadgeText}>{player.number}</ThemedText>
@@ -1091,7 +1139,8 @@ export default function CreateTeamScreen() {
                         </ThemedText>
                       </View>
                       <ThemedText style={styles.reserveReplaceIndicator}>↗</ThemedText>
-                    </Pressable>
+                    </AnimatedPressable>
+                  </Animated.View>
                   ))}
                 {reservePlayers.length === 0 ? (
                   <ThemedText themeColor="textSecondary" style={styles.playerPickerEmpty}>
@@ -1102,25 +1151,27 @@ export default function CreateTeamScreen() {
                 ) : null}
               </ScrollView>
               {activeStarter ? (
-                <Pressable
+                <AnimatedPressable
                   accessibilityRole="button"
                   onPress={() => assignPlayerToSlot(null)}
-                  style={({ pressed }) => [
+                  style={[
                     styles.clearAssignment,
-                    pressed && styles.pressed,
                   ]}>
                   <ThemedText style={styles.clearAssignmentText}>Leave position empty</ThemedText>
-                </Pressable>
+                </AnimatedPressable>
               ) : null}
             </ThemedView>
+            </Animated.View>
           </View>
         </Modal>
       </SafeAreaView>
     </ThemedView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenEntrance: { flex: 1 },
   container: { flex: 1 },
   safeArea: {
     flex: 1,
@@ -1140,7 +1191,6 @@ const styles = StyleSheet.create({
   },
   backIcon: { fontSize: 22, lineHeight: 24, fontWeight: '600' },
   backText: { fontSize: 15, fontWeight: '600' },
-  pressed: { opacity: 0.7 },
   header: { marginBottom: Spacing.four },
   title: { fontSize: 34, lineHeight: 42, fontWeight: '700' },
   subtitle: { marginTop: Spacing.one, fontSize: 16, lineHeight: 23 },
@@ -1265,7 +1315,7 @@ const styles = StyleSheet.create({
   savedPlayersHeading: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   savedPlayersTitle: { fontSize: 14, fontWeight: '700' },
   savedPlayersCount: { fontSize: 12 },
-  savedPlayersChevron: { fontSize: 20, lineHeight: 24, paddingHorizontal: Spacing.one },
+  savedPlayersChevron: { paddingHorizontal: Spacing.one },
   savedPlayersList: { gap: Spacing.two },
   savedPlayer: {
     flexDirection: 'row',
@@ -1362,7 +1412,7 @@ const styles = StyleSheet.create({
   lineupToggleIcon: { fontSize: 17 },
   lineupToggleText: { color: '#1f7a4d', fontSize: 14, fontWeight: '700' },
   lineupToggleTextActive: { color: '#ffffff' },
-  lineupToggleChevron: { color: '#1f7a4d', fontSize: 18, marginLeft: 'auto' },
+  lineupToggleChevron: { marginLeft: 'auto' },
   lineupSection: { gap: Spacing.two },
   lineupHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   lineupTitle: { fontSize: 17, fontWeight: '700' },
