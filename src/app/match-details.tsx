@@ -1,17 +1,11 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  LinearTransition,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/animated-pressable';
+import { ChevronIcon } from '@/components/chevron-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -41,20 +35,6 @@ function formatMatchMinute(
     return `${halfLengthMinutes + Math.floor(secondHalfElapsed / 60)}'`;
   }
   return `${halfLengthMinutes * 2}+${Math.floor((secondHalfElapsed - halfLength) / 60) + 1}'`;
-}
-
-function ChevronIcon({ expanded, color }: { expanded: boolean; color: string }) {
-  const rotation = useSharedValue(expanded ? 225 : 45);
-
-  useEffect(() => {
-    rotation.value = withTiming(expanded ? 225 : 45, { duration: 220 });
-  }, [expanded, rotation]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
-
-  return <Animated.View style={[styles.chevronIcon, { borderColor: color }, animatedStyle]} />;
 }
 
 function Section({
@@ -663,13 +643,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(128, 128, 128, 0.16)',
   },
   sectionChevronBadgeActive: { backgroundColor: '#1f7a4d' },
-  chevronIcon: {
-    width: 8,
-    height: 8,
-    marginTop: -3,
-    borderRightWidth: 2,
-    borderBottomWidth: 2,
-  },
   sectionTitle: { fontSize: 17, lineHeight: 22, fontWeight: '800' },
   eventList: {
     overflow: 'hidden',

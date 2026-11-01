@@ -2,7 +2,17 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  FadeOut,
+  LinearTransition,
+  ZoomIn,
+} from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/animated-pressable';
+import { ChevronIcon } from '@/components/chevron-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -228,39 +238,44 @@ export default function TeamsScreen() {
                 Your match squads
               </ThemedText>
             </View>
-            <Pressable
+            <AnimatedPressable
+              scaleTo={0.93}
               accessibilityRole="button"
               accessibilityLabel="Create a new team"
               onPress={() => router.push('/create-team')}
-              style={({ pressed }) => [styles.newTeamButton, pressed && styles.cardPressed]}>
+              style={styles.newTeamButton}>
               <ThemedText style={styles.newTeamButtonIcon}>+</ThemedText>
               <ThemedText style={styles.newTeamButtonText}>New team</ThemedText>
-            </Pressable>
+            </AnimatedPressable>
           </View>
 
-          <ThemedView type="backgroundElement" style={styles.statsCard}>
-            <View style={styles.statsRow}>
-              {stats.map((stat, index) => (
-                <View key={stat.label} style={styles.statWrapper}>
-                  {index > 0 ? <View style={styles.statDivider} /> : null}
-                  <View style={styles.stat}>
-                    <ThemedText style={styles.statValue}>{stat.value}</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.statLabel}>
-                      {stat.label}
-                    </ThemedText>
+          <Animated.View entering={FadeInDown.duration(320)}>
+            <ThemedView type="backgroundElement" style={styles.statsCard}>
+              <View style={styles.statsRow}>
+                {stats.map((stat, index) => (
+                  <View key={stat.label} style={styles.statWrapper}>
+                    {index > 0 ? <View style={styles.statDivider} /> : null}
+                    <Animated.View
+                      entering={ZoomIn.delay(index * 60).duration(260)}
+                      style={styles.stat}>
+                      <ThemedText style={styles.statValue}>{stat.value}</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary" style={styles.statLabel}>
+                        {stat.label}
+                      </ThemedText>
+                    </Animated.View>
                   </View>
-                </View>
-              ))}
-            </View>
-          </ThemedView>
+                ))}
+              </View>
+            </ThemedView>
+          </Animated.View>
 
-          <Pressable
+          <AnimatedPressable
             accessibilityRole="button"
             onPress={() => router.push('/deleted-teams')}
-            style={({ pressed }) => [styles.deletedTeamsButton, pressed && styles.cardPressed]}>
+            style={styles.deletedTeamsButton}>
             <ThemedText style={styles.deletedTeamsButtonText}>Recently deleted</ThemedText>
             <ThemedText themeColor="textSecondary">›</ThemedText>
-          </Pressable>
+          </AnimatedPressable>
 
           <View style={styles.listHeader}>
             <ThemedText type="subtitle" style={styles.sectionTitle}>
@@ -282,7 +297,7 @@ export default function TeamsScreen() {
                 {deleteError}
               </ThemedText>
             ) : null}
-            {teams.map((team) => {
+            {teams.map((team, teamIndex) => {
               const isExpanded = expandedId === team.id;
               const played = team.wins + team.draws + team.losses;
               const winRate = played === 0 ? 0 : Math.round((team.wins / played) * 100);
@@ -293,8 +308,13 @@ export default function TeamsScreen() {
               );
 
               return (
-                <ThemedView key={team.id} type="backgroundElement" style={styles.teamCard}>
-                  <Pressable
+                <Animated.View
+                  key={team.id}
+                  entering={FadeInUp.delay(Math.min(teamIndex, 8) * 60).duration(340)}
+                  layout={LinearTransition.duration(260)}>
+                <ThemedView type="backgroundElement" style={styles.teamCard}>
+                  <AnimatedPressable
+                    scaleTo={0.985}
                     onPress={() => {
                       if (longPressedTeamId.current === team.id) {
                         longPressedTeamId.current = null;
@@ -318,10 +338,7 @@ export default function TeamsScreen() {
                     accessibilityState={{ expanded: isExpanded }}
                     accessibilityLabel={`${team.name}, ${team.roster.length} players`}
                     accessibilityHint="Long press to delete this team"
-                    style={({ pressed }) => [
-                      styles.teamSummary,
-                      pressed && styles.cardPressed,
-                    ]}>
+                    style={styles.teamSummary}>
                     <View style={styles.cardHeader}>
                       <View
                         style={[
@@ -356,9 +373,7 @@ export default function TeamsScreen() {
                       </View>
 
                       <View style={styles.chevron}>
-                        <ThemedText type="small" themeColor="textSecondary">
-                          {isExpanded ? '▾' : '▸'}
-                        </ThemedText>
+                        <ChevronIcon expanded={isExpanded} color={colors.textSecondary} />
                       </View>
                     </View>
 
@@ -399,24 +414,28 @@ export default function TeamsScreen() {
                         Recent form
                       </ThemedText>
                       <View style={styles.formDots}>
-                        {team.form.map((result, index) => {
+                        {team.form.map((result, formIndex) => {
                           const style = RESULT_COLORS[result];
                           return (
-                            <View
-                              key={`${team.id}-form-${index}`}
+                            <Animated.View
+                              key={`${team.id}-form-${formIndex}`}
+                              entering={ZoomIn.delay(formIndex * 50).duration(220)}
                               style={[styles.formDot, { backgroundColor: style.bg }]}>
                               <ThemedText style={[styles.formDotText, { color: style.text }]}>
                                 {style.label}
                               </ThemedText>
-                            </View>
+                            </Animated.View>
                           );
                         })}
                       </View>
                     </View>
-                  </Pressable>
+                  </AnimatedPressable>
 
                   {isExpanded ? (
-                      <View style={styles.rosterSection}>
+                      <Animated.View
+                        entering={FadeIn.duration(220)}
+                        exiting={FadeOut.duration(150)}
+                        style={styles.rosterSection}>
                         <View style={styles.divider} />
                         <ThemedText type="small" themeColor="textSecondary" style={styles.rosterTitle}>
                           STARTING LINEUP
@@ -498,7 +517,7 @@ export default function TeamsScreen() {
                             )}
                           </>
                         ) : null}
-                        <Pressable
+                        <AnimatedPressable
                           accessibilityRole="button"
                           accessibilityLabel={`Edit ${team.name}`}
                           onPress={() =>
@@ -507,28 +526,23 @@ export default function TeamsScreen() {
                               params: { teamId: team.id },
                             })
                           }
-                          style={({ pressed }) => [
-                            styles.editTeamButton,
-                            pressed && styles.cardPressed,
-                          ]}>
+                          style={styles.editTeamButton}>
                           <ThemedText style={styles.editTeamButtonText}>Edit team</ThemedText>
-                        </Pressable>
-                        <Pressable
+                        </AnimatedPressable>
+                        <AnimatedPressable
                           accessibilityRole="button"
                           accessibilityLabel={`Delete ${team.name}`}
                           onPress={() => {
                             setDeleteError(null);
                             setTeamToDelete(team);
                           }}
-                          style={({ pressed }) => [
-                            styles.deleteTeamButton,
-                            pressed && styles.cardPressed,
-                          ]}>
+                          style={styles.deleteTeamButton}>
                           <ThemedText style={styles.deleteTeamButtonText}>Delete team</ThemedText>
-                        </Pressable>
-                      </View>
+                        </AnimatedPressable>
+                      </Animated.View>
                   ) : null}
                 </ThemedView>
+                </Animated.View>
               );
             })}
           </View>
@@ -547,33 +561,30 @@ export default function TeamsScreen() {
             style={StyleSheet.absoluteFill}
           />
           {teamToDelete ? (
-            <ThemedView type="backgroundElement" style={styles.actionPanel}>
-              <ThemedText type="subtitle" style={styles.actionTitle}>Team actions</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.actionSubtitle}>
-                {teamToDelete.name}
-              </ThemedText>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Delete this team"
-                disabled={isDeleting}
-                onPress={() => confirmDeleteTeam(teamToDelete)}
-                style={({ pressed }) => [
-                  styles.overlayDeleteButton,
-                  pressed && styles.cardPressed,
-                  isDeleting && styles.disabled,
-                ]}>
-                <ThemedText style={styles.overlayDeleteText}>Delete Team</ThemedText>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => setTeamToDelete(null)}
-                style={({ pressed }) => [
-                  styles.overlayCancelButton,
-                  pressed && styles.cardPressed,
-                ]}>
-                <ThemedText style={styles.overlayCancelText}>Cancel</ThemedText>
-              </Pressable>
-            </ThemedView>
+            <Animated.View
+              entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
+              exiting={FadeOut.duration(140)}>
+              <ThemedView type="backgroundElement" style={styles.actionPanel}>
+                <ThemedText type="subtitle" style={styles.actionTitle}>Team actions</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.actionSubtitle}>
+                  {teamToDelete.name}
+                </ThemedText>
+                <AnimatedPressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete this team"
+                  disabled={isDeleting}
+                  onPress={() => confirmDeleteTeam(teamToDelete)}
+                  style={[styles.overlayDeleteButton, isDeleting && styles.disabled]}>
+                  <ThemedText style={styles.overlayDeleteText}>Delete Team</ThemedText>
+                </AnimatedPressable>
+                <AnimatedPressable
+                  accessibilityRole="button"
+                  onPress={() => setTeamToDelete(null)}
+                  style={styles.overlayCancelButton}>
+                  <ThemedText style={styles.overlayCancelText}>Cancel</ThemedText>
+                </AnimatedPressable>
+              </ThemedView>
+            </Animated.View>
           ) : null}
         </View>
       </Modal>
@@ -647,7 +658,6 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 24, lineHeight: 30 },
 
   teamList: { gap: Spacing.three },
-  cardPressed: { opacity: 0.85 },
   teamCard: {
     padding: Spacing.three,
     borderRadius: Spacing.three,
