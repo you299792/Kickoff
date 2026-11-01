@@ -10,6 +10,7 @@ import {
   StyleSheet,
   TextInput,
   View,
+  type ScrollViewInstance,
 } from 'react-native';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -74,6 +75,7 @@ const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
 
 export default function NewMatchScreen() {
   const router = useRouter();
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [teamsLoading, setTeamsLoading] = useState(true);
@@ -171,6 +173,10 @@ export default function NewMatchScreen() {
       };
     }, [resetForm]),
   );
+
+  useEffect(() => {
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+  }, [currentStep]);
 
   const matchFormat =
     MATCH_FORMATS.find((format) => format.id === matchFormatId) ??
@@ -342,6 +348,7 @@ export default function NewMatchScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.keyboardView}>
           <ScrollView
+            ref={scrollViewRef}
             contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled">
