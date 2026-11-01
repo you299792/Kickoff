@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -7,7 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -159,7 +160,7 @@ export default function CreateTeamScreen() {
     };
   }, [teamId]);
 
-  function resetForm() {
+  const resetForm = useCallback(() => {
     setTeamName('');
     setCaptainId(null);
     setShowCaptainPicker(false);
@@ -182,7 +183,31 @@ export default function CreateTeamScreen() {
     setLineup({});
     setActivePitchSlot(null);
     setSaveError(null);
-  }
+  }, []);
+
+  const isFormDirtyRef = useRef(false);
+  isFormDirtyRef.current =
+    teamName.trim() !== '' ||
+    captainId !== null ||
+    homeGround.trim() !== '' ||
+    teamColor !== TEAM_COLOR_PALETTE[0] ||
+    players.length > 0 ||
+    Object.keys(lineup).length > 0;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!teamId && isFormDirtyRef.current) {
+        Alert.alert(
+          'Continue this team?',
+          'You have an unfinished team from last time. Continue where you left off, or start a new one?',
+          [
+            { text: 'Continue', style: 'cancel' },
+            { text: 'Start new', style: 'destructive', onPress: () => resetForm() },
+          ],
+        );
+      }
+    }, [teamId, resetForm]),
+  );
 
   async function saveTeam() {
     const name = teamName.trim();
