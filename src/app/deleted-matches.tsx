@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInUp, FadeOut, LinearTransition, ZoomIn } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/animated-pressable';
+import { ScreenTransition } from '@/components/screen-transition';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -101,7 +102,7 @@ export default function DeletedMatchesScreen() {
   }
 
   return (
-    <Animated.View entering={FadeIn.duration(280)} style={styles.screenEntrance}>
+    <ScreenTransition style={styles.screenEntrance}>
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -218,7 +219,7 @@ export default function DeletedMatchesScreen() {
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
-    </Animated.View>
+    </ScreenTransition>
   );
 }
 

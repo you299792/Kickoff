@@ -21,6 +21,7 @@ import Animated, {
 
 import { AnimatedPressable } from '@/components/animated-pressable';
 import { ChevronIcon } from '@/components/chevron-icon';
+import { ScreenTransition } from '@/components/screen-transition';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -371,7 +372,7 @@ export default function CreateTeamScreen() {
   const captainPlayer = players.find((player) => player.id === captainId) ?? null;
 
   return (
-    <Animated.View entering={FadeIn.duration(280)} style={styles.screenEntrance}>
+    <ScreenTransition style={styles.screenEntrance}>
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -1191,7 +1192,7 @@ export default function CreateTeamScreen() {
         </Modal>
       </SafeAreaView>
     </ThemedView>
-    </Animated.View>
+    </ScreenTransition>
   );
 }
 
