@@ -1,6 +1,7 @@
-import { createElement, useCallback, useEffect, useState } from 'react';
+import { createElement, useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -68,6 +69,7 @@ const MATCH_FORMATS = [
   { id: 'extended', label: 'Extended', halfMinutes: 60, description: '2 × 60 minute halves' },
 ] as const;
 const DEFAULT_MATCH_FORMAT_ID: (typeof MATCH_FORMATS)[number]['id'] = 'standard';
+const DEFAULT_COMPETITION = 'League';
 const HAIRLINE = 'rgba(128, 128, 128, 0.25)';
 
 export default function NewMatchScreen() {
@@ -83,7 +85,7 @@ export default function NewMatchScreen() {
   const [stepDirection, setStepDirection] = useState<'forward' | 'backward'>('forward');
   const [matchLineups, setMatchLineups] = useState<MatchLineups>({});
   const [openLineupSlot, setOpenLineupSlot] = useState<string | null>(null);
-  const [competition, setCompetition] = useState('League');
+  const [competition, setCompetition] = useState(DEFAULT_COMPETITION);
   const [location, setLocation] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -93,9 +95,50 @@ export default function NewMatchScreen() {
   const [error, setError] = useState('');
   const [savingMatch, setSavingMatch] = useState(false);
 
+  const isFormDirtyRef = useRef(false);
+  isFormDirtyRef.current =
+    selectedTeamId !== '' ||
+    selectedOpponentId !== '' ||
+    currentStep !== 1 ||
+    competition !== DEFAULT_COMPETITION ||
+    location.trim() !== '' ||
+    date !== '' ||
+    time !== '' ||
+    notes.trim() !== '' ||
+    matchFormatId !== DEFAULT_MATCH_FORMAT_ID ||
+    Object.keys(matchLineups).length > 0;
+
+  const resetForm = useCallback(() => {
+    setSelectedTeamId('');
+    setSelectedOpponentId('');
+    setOpenTeamDropdown(null);
+    setStepDirection('forward');
+    setCurrentStep(1);
+    setMatchLineups({});
+    setOpenLineupSlot(null);
+    setCompetition(DEFAULT_COMPETITION);
+    setLocation('');
+    setDate('');
+    setTime('');
+    setMatchFormatId(DEFAULT_MATCH_FORMAT_ID);
+    setNotes('');
+    setError('');
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
+
+      if (isFormDirtyRef.current) {
+        Alert.alert(
+          'Continue your new match?',
+          'You have an unfinished match setup from last time. Continue where you left off, or start a new one?',
+          [
+            { text: 'Continue', style: 'cancel' },
+            { text: 'Start new', style: 'destructive', onPress: () => resetForm() },
+          ],
+        );
+      }
 
       async function loadTeams() {
         setTeamsLoading(true);
@@ -126,7 +169,7 @@ export default function NewMatchScreen() {
       return () => {
         isActive = false;
       };
-    }, []),
+    }, [resetForm]),
   );
 
   const matchFormat =
@@ -278,6 +321,7 @@ export default function NewMatchScreen() {
 
     try {
       await saveMatchFixture(match);
+      resetForm();
       if (status === 'in-progress') {
         router.push({ pathname: '/live-match', params: { matchId } });
       } else {
