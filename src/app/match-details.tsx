@@ -201,6 +201,7 @@ export default function MatchDetailsScreen() {
   }
 
   return (
+    <Animated.View entering={FadeIn.duration(280)} style={styles.screenEntrance}>
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -531,10 +532,12 @@ export default function MatchDetailsScreen() {
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenEntrance: { flex: 1 },
   container: { flex: 1 },
   safeArea: {
     flex: 1,

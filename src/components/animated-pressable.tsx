@@ -1,11 +1,16 @@
 import { forwardRef } from 'react';
 import { Pressable, type PressableProps, type StyleProp, type View, type ViewStyle } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+  type AnimatedStyle,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 const ReanimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type AnimatedPressableProps = Omit<PressableProps, 'style'> & {
-  style?: StyleProp<ViewStyle>;
+  style?: StyleProp<ViewStyle> | AnimatedStyle<ViewStyle>;
   /** Scale applied while pressed. Defaults to a subtle 0.96. */
   scaleTo?: number;
 };

@@ -563,7 +563,8 @@ export default function TeamsScreen() {
           {teamToDelete ? (
             <Animated.View
               entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
-              exiting={FadeOut.duration(140)}>
+              exiting={FadeOut.duration(140)}
+              style={styles.overlayAnimatedWrapper}>
               <ThemedView type="backgroundElement" style={styles.actionPanel}>
                 <ThemedText type="subtitle" style={styles.actionTitle}>Team actions</ThemedText>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.actionSubtitle}>
@@ -743,6 +744,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: Spacing.four,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  overlayAnimatedWrapper: {
+    width: '100%',
+    alignItems: 'center',
   },
   actionPanel: {
     width: '100%',

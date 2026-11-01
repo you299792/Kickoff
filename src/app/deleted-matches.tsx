@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeIn, FadeInUp, LinearTransition } from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/animated-pressable';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -99,30 +101,32 @@ export default function DeletedMatchesScreen() {
   }
 
   return (
+    <Animated.View entering={FadeIn.duration(280)} style={styles.screenEntrance}>
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Pressable
+          <AnimatedPressable
+            scaleTo={0.94}
             accessibilityRole="button"
             accessibilityLabel="Back to home"
             onPress={() => router.replace('/')}
-            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
+            style={styles.backButton}>
             <ThemedText themeColor="textSecondary" style={styles.backText}>‹</ThemedText>
             <ThemedText themeColor="textSecondary">Home</ThemedText>
-          </Pressable>
+          </AnimatedPressable>
 
-          <View style={styles.header}>
+          <Animated.View entering={FadeInUp.duration(300)} style={styles.header}>
             <ThemedText type="title" style={styles.title}>Recently deleted</ThemedText>
             <ThemedText type="small" themeColor="textSecondary" style={styles.subtitle}>
               Matches are permanently deleted 30 days after they are moved here.
             </ThemedText>
-          </View>
+          </Animated.View>
 
           {error ? <ThemedText style={styles.errorText}>{error}</ThemedText> : null}
 
           {deletedMatches.length > 0 ? (
             <View style={styles.matchList}>
-              {deletedMatches.map((deletedMatch) => {
+              {deletedMatches.map((deletedMatch, matchIndex) => {
                 const match = deletedMatch.match;
                 const expiresAt = deletedMatch.deletedAt + DELETED_MATCH_RETENTION_MS;
                 const daysRemaining = Math.max(
@@ -130,8 +134,11 @@ export default function DeletedMatchesScreen() {
                   Math.ceil((expiresAt - now) / (24 * 60 * 60 * 1000)),
                 );
                 return (
-                  <ThemedView
+                  <Animated.View
                     key={match.id}
+                    entering={FadeInUp.delay(Math.min(matchIndex, 8) * 60).duration(300)}
+                    layout={LinearTransition.duration(220)}>
+                  <ThemedView
                     type="backgroundElement"
                     style={styles.matchCard}>
                     <View style={styles.teamsRow}>
@@ -161,53 +168,53 @@ export default function DeletedMatchesScreen() {
                       Expires {new Date(expiresAt).toLocaleDateString()}
                     </ThemedText>
                     <View style={styles.actions}>
-                      <Pressable
+                      <AnimatedPressable
                         accessibilityRole="button"
                         accessibilityLabel={`Restore match between ${match.homeTeam.name} and ${match.awayTeam.name}`}
                         disabled={busyMatchId !== null}
                         onPress={() => void restoreMatch(match.id)}
-                        style={({ pressed }) => [
-                          styles.restoreButton,
-                          pressed && styles.pressed,
-                          busyMatchId !== null && styles.disabled,
-                        ]}>
+                        style={[styles.restoreButton, busyMatchId !== null && styles.disabled]}>
                         <ThemedText style={styles.restoreButtonText}>Restore</ThemedText>
-                      </Pressable>
-                      <Pressable
+                      </AnimatedPressable>
+                      <AnimatedPressable
                         accessibilityRole="button"
                         accessibilityLabel={`Permanently delete match between ${match.homeTeam.name} and ${match.awayTeam.name}`}
                         disabled={busyMatchId !== null}
                         onPress={() => confirmPermanentDelete(deletedMatch)}
-                        style={({ pressed }) => [
+                        style={[
                           styles.permanentDeleteButton,
-                          pressed && styles.pressed,
                           busyMatchId !== null && styles.disabled,
                         ]}>
                         <ThemedText style={styles.permanentDeleteText}>Delete permanently</ThemedText>
-                      </Pressable>
+                      </AnimatedPressable>
                     </View>
                   </ThemedView>
+                  </Animated.View>
                 );
               })}
             </View>
           ) : isLoading ? (
             <ThemedText themeColor="textSecondary">Loading deleted matches…</ThemedText>
           ) : !error ? (
-            <ThemedView type="backgroundElement" style={styles.emptyState}>
-              <ThemedText type="subtitle" style={styles.emptyTitle}>Trash is empty</ThemedText>
-              <ThemedText type="small" themeColor="textSecondary" style={styles.emptyBody}>
-                Deleted matches will be kept here for up to 30 days, and can be restored before
-                they expire.
-              </ThemedText>
-            </ThemedView>
+            <Animated.View entering={FadeIn.duration(260)}>
+              <ThemedView type="backgroundElement" style={styles.emptyState}>
+                <ThemedText type="subtitle" style={styles.emptyTitle}>Trash is empty</ThemedText>
+                <ThemedText type="small" themeColor="textSecondary" style={styles.emptyBody}>
+                  Deleted matches will be kept here for up to 30 days, and can be restored before
+                  they expire.
+                </ThemedText>
+              </ThemedView>
+            </Animated.View>
           ) : null}
         </ScrollView>
       </SafeAreaView>
     </ThemedView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenEntrance: { flex: 1 },
   container: { flex: 1 },
   safeArea: {
     flex: 1,
@@ -228,7 +235,6 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   backText: { fontSize: 22, lineHeight: 24 },
-  pressed: { opacity: 0.65 },
   header: { marginTop: Spacing.two, marginBottom: Spacing.three, gap: Spacing.one },
   title: { fontSize: 32, lineHeight: 38, fontWeight: '800' },
   subtitle: { lineHeight: 19 },

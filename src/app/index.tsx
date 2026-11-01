@@ -1,8 +1,29 @@
 import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
-import { Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  Alert,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  FadeOut,
+  interpolateColor,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  ZoomIn,
+} from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/animated-pressable';
 import { ThemedText } from '@/components/themed-text';
@@ -80,6 +101,45 @@ function teamInitials(name: string) {
     .slice(0, 2)
     .map((word) => word[0].toUpperCase())
     .join('');
+}
+
+function FilterChip({
+  label,
+  count,
+  active,
+  onPress,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onPress: () => void;
+}) {
+  const progress = useSharedValue(active ? 1 : 0);
+
+  if (active !== (progress.value === 1)) {
+    progress.value = withTiming(active ? 1 : 0, { duration: 180 });
+  }
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(progress.value, [0, 1], ['transparent', '#1f7a4d']),
+    borderColor: interpolateColor(progress.value, [0, 1], [HAIRLINE, '#1f7a4d']),
+  }));
+
+  return (
+    <AnimatedPressable
+      scaleTo={0.94}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      onPress={onPress}
+      style={[styles.chip, animatedStyle] as StyleProp<ViewStyle>}>
+      <ThemedText type="small" style={[styles.chipText, active && styles.chipTextActive]}>
+        {label}
+      </ThemedText>
+      <ThemedText type="small" style={[styles.chipCount, active && styles.chipTextActive]}>
+        {count}
+      </ThemedText>
+    </AnimatedPressable>
+  );
 }
 
 export default function HomeScreen() {
@@ -332,34 +392,39 @@ export default function HomeScreen() {
               colors={[colors.text]}
             />
           }>
-          <View style={styles.header}>
+          <Animated.View entering={FadeInDown.duration(320)} style={styles.header}>
             <ThemedText type="title" style={styles.title}>
               Kickoff
             </ThemedText>
             <ThemedText themeColor="textSecondary" style={styles.subtitle}>
               Your match history
             </ThemedText>
-          </View>
+          </Animated.View>
 
-          <ThemedView type="backgroundElement" style={styles.statsCard}>
-            <View style={styles.statsRow}>
-              {stats.map((stat, index) => (
-                <Fragment key={stat.label}>
-                  {index > 0 ? <View style={styles.statDivider} /> : null}
-                  <View style={styles.stat}>
-                    <ThemedText style={[styles.statValue, stat.color ? { color: stat.color } : null]}>
-                      {stat.value}
-                    </ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary" style={styles.statLabel}>
-                      {stat.label}
-                    </ThemedText>
-                  </View>
-                </Fragment>
-              ))}
-            </View>
-          </ThemedView>
+          <Animated.View entering={FadeInDown.delay(60).duration(320)}>
+            <ThemedView type="backgroundElement" style={styles.statsCard}>
+              <View style={styles.statsRow}>
+                {stats.map((stat, index) => (
+                  <Fragment key={stat.label}>
+                    {index > 0 ? <View style={styles.statDivider} /> : null}
+                    <Animated.View
+                      entering={ZoomIn.delay(100 + index * 50).duration(260)}
+                      style={styles.stat}>
+                      <ThemedText
+                        style={[styles.statValue, stat.color ? { color: stat.color } : null]}>
+                        {stat.value}
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary" style={styles.statLabel}>
+                        {stat.label}
+                      </ThemedText>
+                    </Animated.View>
+                  </Fragment>
+                ))}
+              </View>
+            </ThemedView>
+          </Animated.View>
 
-          <View style={styles.quickActionsRow}>
+          <Animated.View entering={FadeInDown.delay(120).duration(320)} style={styles.quickActionsRow}>
             <AnimatedPressable
               accessibilityRole="button"
               onPress={() => router.push('/deleted-matches')}
@@ -380,7 +445,7 @@ export default function HomeScreen() {
                 Backup &amp; restore
               </ThemedText>
             </AnimatedPressable>
-          </View>
+          </Animated.View>
 
           {upcomingMatches.length > 0 || fixturesError ? (
             <View style={styles.upcomingSection}>
@@ -395,9 +460,12 @@ export default function HomeScreen() {
               {fixturesError ? (
                 <ThemedText style={styles.fixturesError}>{fixturesError}</ThemedText>
               ) : null}
-              {upcomingMatches.map((match) => (
-                <AnimatedPressable
+              {upcomingMatches.map((match, matchIndex) => (
+                <Animated.View
                   key={match.id}
+                  entering={FadeInUp.delay(Math.min(matchIndex, 8) * 60).duration(320)}
+                  layout={LinearTransition.duration(260)}>
+                <AnimatedPressable
                   scaleTo={0.985}
                   accessibilityRole="button"
                   accessibilityLabel={`Hold to delete match between ${match.homeTeam.name} and ${match.awayTeam.name}`}
@@ -443,6 +511,7 @@ export default function HomeScreen() {
                   </View>
                   </ThemedView>
                 </AnimatedPressable>
+                </Animated.View>
               ))}
             </View>
           ) : null}
@@ -456,36 +525,30 @@ export default function HomeScreen() {
             </ThemedText>
           </View>
 
-          <View style={styles.filtersRow}>
+          <Animated.View entering={FadeInDown.delay(160).duration(300)} style={styles.filtersRow}>
             {FILTERS.map((item) => {
               const isActive = item.key === filter;
               const count = matchHistory.filter((match) => matchesFilter(match, item.key)).length;
 
               return (
-                <AnimatedPressable
+                <FilterChip
                   key={item.key}
-                  scaleTo={0.94}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
+                  label={item.label}
+                  count={count}
+                  active={isActive}
                   onPress={() => setFilter(item.key)}
-                  style={[styles.chip, isActive && styles.chipActive]}>
-                  <ThemedText
-                    type="small"
-                    style={[styles.chipText, isActive && styles.chipTextActive]}>
-                    {item.label}
-                  </ThemedText>
-                  <ThemedText
-                    type="small"
-                    style={[styles.chipCount, isActive && styles.chipTextActive]}>
-                    {count}
-                  </ThemedText>
-                </AnimatedPressable>
+                />
               );
             })}
-          </View>
+          </Animated.View>
 
-          <View style={styles.matchList}>
-            {visibleMatches.map((match) => {
+          <Animated.View
+            key={filter}
+            entering={FadeIn.duration(220)}
+            exiting={FadeOut.duration(140)}
+            layout={LinearTransition.duration(240)}
+            style={styles.matchList}>
+            {visibleMatches.map((match, matchIndex) => {
               const result = getResult(match);
               const resultStyle = RESULT_STYLES[result];
               const homeWon = result === 'W';
@@ -494,7 +557,11 @@ export default function HomeScreen() {
               const awayOutcome = result === 'D' ? 'DRAW' : awayWon ? 'WIN' : 'LOSS';
 
               return (
-                <View key={match.id} style={styles.matchHistoryEntry}>
+                <Animated.View
+                  key={match.id}
+                  entering={FadeInUp.delay(Math.min(matchIndex, 10) * 45).duration(300)}
+                  layout={LinearTransition.duration(220)}
+                  style={styles.matchHistoryEntry}>
                   <AnimatedPressable
                     scaleTo={0.985}
                     accessibilityRole="button"
@@ -630,34 +697,40 @@ export default function HomeScreen() {
                     </View>
                     </ThemedView>
                   </AnimatedPressable>
-                </View>
+                </Animated.View>
               );
             })}
 
             {visibleMatches.length === 0 ? (
-              <ThemedView type="backgroundElement" style={styles.emptyState}>
-                <ThemedText type="subtitle" style={styles.emptyTitle}>
-                  No matches yet
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.emptyBody}>
-                  Nothing to show for this filter. Try another one or log a new match.
-                </ThemedText>
-              </ThemedView>
+              <Animated.View entering={FadeIn.duration(240)}>
+                <ThemedView type="backgroundElement" style={styles.emptyState}>
+                  <ThemedText type="subtitle" style={styles.emptyTitle}>
+                    No matches yet
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.emptyBody}>
+                    Nothing to show for this filter. Try another one or log a new match.
+                  </ThemedText>
+                </ThemedView>
+              </Animated.View>
             ) : null}
-          </View>
+          </Animated.View>
         </ScrollView>
 
-        <AnimatedPressable
-          scaleTo={0.93}
-          accessibilityLabel="Add new match"
-          accessibilityRole="button"
-          onPress={handleAddMatch}
-          style={[styles.addButton, { bottom: insets.bottom }]}>
-          <View style={styles.addButtonIcon}>
-            <ThemedText style={styles.addButtonIconText}>+</ThemedText>
-          </View>
-          <ThemedText style={styles.addButtonText}>New match</ThemedText>
-        </AnimatedPressable>
+        <Animated.View
+          entering={ZoomIn.delay(260).duration(340)}
+          style={[styles.addButtonWrapper, { bottom: insets.bottom }]}>
+          <AnimatedPressable
+            scaleTo={0.93}
+            accessibilityLabel="Add new match"
+            accessibilityRole="button"
+            onPress={handleAddMatch}
+            style={styles.addButton}>
+            <View style={styles.addButtonIcon}>
+              <ThemedText style={styles.addButtonIconText}>+</ThemedText>
+            </View>
+            <ThemedText style={styles.addButtonText}>New match</ThemedText>
+          </AnimatedPressable>
+        </Animated.View>
         <Modal
           visible={matchActionsTarget !== null}
           transparent
@@ -671,31 +744,36 @@ export default function HomeScreen() {
               style={StyleSheet.absoluteFill}
             />
             {matchActionsTarget ? (
-              <ThemedView type="backgroundElement" style={styles.actionPanel}>
-                <ThemedText type="subtitle" style={styles.actionTitle}>Match actions</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" style={styles.actionSubtitle}>
-                  {matchActionsTarget.homeTeam.name} vs {matchActionsTarget.awayTeam.name}
-                </ThemedText>
-                <AnimatedPressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Delete this match"
-                  disabled={deletingMatchId !== null}
-                  onPress={() => confirmDeleteMatch(matchActionsTarget)}
-                  style={[
-                    styles.overlayDeleteButton,
-                    deletingMatchId !== null && styles.disabled,
-                  ]}>
-                  <ThemedText style={styles.overlayDeleteText}>
-                    Delete Match
+              <Animated.View
+                entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
+                exiting={FadeOut.duration(140)}
+                style={styles.overlayAnimatedWrapper}>
+                <ThemedView type="backgroundElement" style={styles.actionPanel}>
+                  <ThemedText type="subtitle" style={styles.actionTitle}>Match actions</ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.actionSubtitle}>
+                    {matchActionsTarget.homeTeam.name} vs {matchActionsTarget.awayTeam.name}
                   </ThemedText>
-                </AnimatedPressable>
-                <AnimatedPressable
-                  accessibilityRole="button"
-                  onPress={() => setMatchActionsTarget(null)}
-                  style={styles.overlayCancelButton}>
-                  <ThemedText style={styles.overlayCancelText}>Cancel</ThemedText>
-                </AnimatedPressable>
-              </ThemedView>
+                  <AnimatedPressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete this match"
+                    disabled={deletingMatchId !== null}
+                    onPress={() => confirmDeleteMatch(matchActionsTarget)}
+                    style={[
+                      styles.overlayDeleteButton,
+                      deletingMatchId !== null && styles.disabled,
+                    ]}>
+                    <ThemedText style={styles.overlayDeleteText}>
+                      Delete Match
+                    </ThemedText>
+                  </AnimatedPressable>
+                  <AnimatedPressable
+                    accessibilityRole="button"
+                    onPress={() => setMatchActionsTarget(null)}
+                    style={styles.overlayCancelButton}>
+                    <ThemedText style={styles.overlayCancelText}>Cancel</ThemedText>
+                  </AnimatedPressable>
+                </ThemedView>
+              </Animated.View>
             ) : null}
           </View>
         </Modal>
@@ -711,6 +789,9 @@ export default function HomeScreen() {
               onPress={() => setBackupModalVisible(false)}
               style={StyleSheet.absoluteFill}
             />
+            <Animated.View
+              entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
+              style={styles.overlayAnimatedWrapper}>
             <ThemedView type="backgroundElement" style={styles.actionPanel}>
               <ThemedText type="subtitle" style={styles.actionTitle}>Backup &amp; restore</ThemedText>
               <ThemedText type="small" themeColor="textSecondary" style={styles.actionSubtitle}>
@@ -765,6 +846,7 @@ export default function HomeScreen() {
                 <ThemedText style={styles.overlayCancelText}>Close</ThemedText>
               </AnimatedPressable>
             </ThemedView>
+            </Animated.View>
           </View>
         </Modal>
       </SafeAreaView>
@@ -947,10 +1029,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth * 2,
     borderColor: HAIRLINE,
   },
-  chipActive: {
-    backgroundColor: '#1f7a4d',
-    borderColor: '#1f7a4d',
-  },
   disabled: { opacity: 0.5 },
   chipText: {
     fontWeight: '600',
@@ -1077,6 +1155,10 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
+  overlayAnimatedWrapper: {
+    width: '100%',
+    alignItems: 'center',
+  },
   actionPanel: {
     width: '100%',
     maxWidth: 360,
@@ -1134,11 +1216,13 @@ const styles = StyleSheet.create({
   emptyBody: {
     textAlign: 'center',
   },
-  addButton: {
+  addButtonWrapper: {
     position: 'absolute',
     right: Spacing.three,
     bottom: 32,
     zIndex: 10,
+  },
+  addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
