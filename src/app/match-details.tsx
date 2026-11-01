@@ -1,8 +1,17 @@
-import { useCallback, useState, type ReactNode } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/animated-pressable';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -35,15 +44,17 @@ function formatMatchMinute(
 }
 
 function ChevronIcon({ expanded, color }: { expanded: boolean; color: string }) {
-  return (
-    <View
-      style={[
-        styles.chevronIcon,
-        { borderColor: color },
-        { transform: [{ rotate: expanded ? '225deg' : '45deg' }] },
-      ]}
-    />
-  );
+  const rotation = useSharedValue(expanded ? 225 : 45);
+
+  useEffect(() => {
+    rotation.value = withTiming(expanded ? 225 : 45, { duration: 220 });
+  }, [expanded, rotation]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
+  return <Animated.View style={[styles.chevronIcon, { borderColor: color }, animatedStyle]} />;
 }
 
 function Section({
@@ -62,13 +73,13 @@ function Section({
   const colors = useTheme();
 
   return (
-    <>
-      <Pressable
+    <Animated.View layout={LinearTransition.duration(220)}>
+      <AnimatedPressable
+        scaleTo={0.985}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         accessibilityLabel={`${title}${expanded ? ', expanded' : ', collapsed'}`}
-        onPress={onToggle}
-        style={({ pressed }) => [pressed && styles.sectionHeaderPressed]}>
+        onPress={onToggle}>
         <ThemedView type="backgroundElement" style={styles.sectionHeader}>
           <ThemedText type="subtitle" style={styles.sectionTitle}>{title}</ThemedText>
           <View style={styles.sectionHeaderRight}>
@@ -81,9 +92,13 @@ function Section({
             </View>
           </View>
         </ThemedView>
-      </Pressable>
-      {expanded ? children : null}
-    </>
+      </AnimatedPressable>
+      {expanded ? (
+        <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(150)}>
+          {children}
+        </Animated.View>
+      ) : null}
+    </Animated.View>
   );
 }
 
@@ -209,14 +224,15 @@ export default function MatchDetailsScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Pressable
+          <AnimatedPressable
+            scaleTo={0.94}
             accessibilityRole="button"
             accessibilityLabel="Back to match history"
             onPress={() => router.replace('/')}
-            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
+            style={styles.backButton}>
             <ThemedText themeColor="textSecondary" style={styles.backText}>‹</ThemedText>
             <ThemedText themeColor="textSecondary">Match history</ThemedText>
-          </Pressable>
+          </AnimatedPressable>
 
           {match ? (
             <>
@@ -228,18 +244,14 @@ export default function MatchDetailsScreen() {
                     {match.competition}
                   </ThemedText>
                 </View>
-                <Pressable
+                <AnimatedPressable
                   accessibilityRole="button"
                   accessibilityLabel={`Delete match between ${match.homeTeam.name} and ${match.awayTeam.name}`}
                   disabled={isDeleting}
                   onPress={confirmDeleteMatch}
-                  style={({ pressed }) => [
-                    styles.deleteButton,
-                    pressed && styles.pressed,
-                    isDeleting && styles.disabled,
-                  ]}>
+                  style={[styles.deleteButton, isDeleting && styles.disabled]}>
                   <ThemedText style={styles.deleteButtonText}>Delete</ThemedText>
-                </Pressable>
+                </AnimatedPressable>
               </View>
 
               <ThemedView type="backgroundElement" style={styles.scoreCard}>
@@ -563,7 +575,6 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   backText: { fontSize: 22, lineHeight: 24 },
-  pressed: { opacity: 0.65 },
   disabled: { opacity: 0.5 },
   deleteButton: {
     minHeight: 40,
@@ -642,7 +653,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: HAIRLINE,
   },
-  sectionHeaderPressed: { opacity: 0.6 },
   sectionHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   sectionChevronBadge: {
     width: 28,
