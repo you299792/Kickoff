@@ -13,6 +13,7 @@ import Animated, {
 
 import { AnimatedPressable } from '@/components/animated-pressable';
 import { ChevronIcon } from '@/components/chevron-icon';
+import { ScreenTransition } from '@/components/screen-transition';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import {
@@ -216,6 +217,7 @@ export default function TeamsScreen() {
   }
 
   return (
+    <ScreenTransition style={styles.screenEntrance}>
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView
@@ -590,10 +592,12 @@ export default function TeamsScreen() {
         </View>
       </Modal>
     </ThemedView>
+    </ScreenTransition>
   );
 }
 
 const styles = StyleSheet.create({
+  screenEntrance: { flex: 1 },
   container: { flex: 1 },
   safeArea: {
     flex: 1,
