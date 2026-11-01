@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp, FadeOut, LinearTransition } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/animated-pressable';
 import { ThemedText } from '@/components/themed-text';
@@ -194,6 +194,12 @@ export default function LiveMatchScreen() {
     { id: string; playerOutName: string; playerInName: string; isConcussion: boolean }[]
   >([]);
   const [showPlayerMinutes, setShowPlayerMinutes] = useState(false);
+  const [pendingPeriodConfirm, setPendingPeriodConfirm] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -772,6 +778,22 @@ export default function LiveMatchScreen() {
     if (await persistMatch(savedMatch)) router.replace('/');
   }
 
+  function requestPeriodConfirm(
+    title: string,
+    message: string,
+    confirmLabel: string,
+    action: () => void,
+  ) {
+    setPendingPeriodConfirm({ title, message, confirmLabel, onConfirm: action });
+  }
+
+  function confirmPendingPeriodAction() {
+    const pending = pendingPeriodConfirm;
+    if (!pending) return;
+    setPendingPeriodConfirm(null);
+    pending.onConfirm();
+  }
+
   return (
     <Animated.View entering={FadeIn.duration(280)} style={styles.screenEntrance}>
     <ThemedView style={styles.container}>
@@ -935,7 +957,14 @@ export default function LiveMatchScreen() {
                 {period === 'regulation' && !isSecondHalf ? (
                   <AnimatedPressable
                     accessibilityRole="button"
-                    onPress={endFirstHalf}
+                    onPress={() =>
+                      requestPeriodConfirm(
+                        'Proceed to half time?',
+                        'This ends the first half and starts the half-time break.',
+                        'Proceed',
+                        endFirstHalf,
+                      )
+                    }
                     disabled={match.status === 'completed'}
                     style={[
                       styles.periodActionButton,
@@ -950,7 +979,14 @@ export default function LiveMatchScreen() {
                 {period === 'regulation' && isSecondHalf ? (
                   <AnimatedPressable
                     accessibilityRole="button"
-                    onPress={endMatch}
+                    onPress={() =>
+                      requestPeriodConfirm(
+                        'End the match?',
+                        'This ends regular time and moves the match to full time.',
+                        'End match',
+                        endMatch,
+                      )
+                    }
                     disabled={match.status === 'completed'}
                     style={[
                       styles.periodActionButton,
@@ -965,7 +1001,14 @@ export default function LiveMatchScreen() {
                 {period === 'half-time' ? (
                   <AnimatedPressable
                     accessibilityRole="button"
-                    onPress={startSecondHalf}
+                    onPress={() =>
+                      requestPeriodConfirm(
+                        'Start the second half?',
+                        'The clock will resume at the start of the second half.',
+                        'Start second half',
+                        startSecondHalf,
+                      )
+                    }
                     style={[
                       styles.periodActionButton,
                       styles.periodActionPrimary,
@@ -1004,7 +1047,16 @@ export default function LiveMatchScreen() {
                 {period === 'extra-time-second' && canEndExtraTimeHalf ? (
                   <AnimatedPressable
                     accessibilityRole="button"
-                    onPress={endMatch}
+                    onPress={() =>
+                      requestPeriodConfirm(
+                        'End the match?',
+                        isTied
+                          ? 'This ends extra time. The match will proceed to a penalty shootout.'
+                          : 'This ends extra time and finalises the result.',
+                        'End match',
+                        endMatch,
+                      )
+                    }
                     style={[
                       styles.periodActionButton,
                       styles.periodActionSecondary,
@@ -1040,7 +1092,14 @@ export default function LiveMatchScreen() {
                   {canAddExtraTime ? (
                     <AnimatedPressable
                       accessibilityRole="button"
-                      onPress={startExtraTime}
+                      onPress={() =>
+                        requestPeriodConfirm(
+                          'Proceed to extra time?',
+                          `The match will play ${extraTimeHalfMinutes * 2} additional minutes in two ${extraTimeHalfMinutes}-minute halves.`,
+                          'Start extra time',
+                          startExtraTime,
+                        )
+                      }
                       style={[
                         styles.periodActionButton,
                         styles.periodActionPrimary,
@@ -1082,7 +1141,14 @@ export default function LiveMatchScreen() {
                   </ThemedText>
                   <AnimatedPressable
                     accessibilityRole="button"
-                    onPress={startPenaltyShootout}
+                    onPress={() =>
+                      requestPeriodConfirm(
+                        'Proceed to penalty shootout?',
+                        'The match will now be decided by a penalty shootout.',
+                        'Start penalties',
+                        startPenaltyShootout,
+                      )
+                    }
                     style={[
                       styles.periodActionButton,
                       styles.periodActionPrimary,
@@ -2245,6 +2311,49 @@ export default function LiveMatchScreen() {
             </ThemedView>
           </View>
         </Modal>
+
+        <Modal
+          visible={pendingPeriodConfirm !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPendingPeriodConfirm(null)}>
+          <View style={styles.actionOverlay}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+              onPress={() => setPendingPeriodConfirm(null)}
+              style={StyleSheet.absoluteFill}
+            />
+            {pendingPeriodConfirm ? (
+              <Animated.View
+                entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
+                exiting={FadeOut.duration(140)}>
+                <ThemedView type="backgroundElement" style={styles.actionPanel}>
+                  <ThemedText type="subtitle" style={styles.actionTitle}>
+                    {pendingPeriodConfirm.title}
+                  </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" style={styles.actionSubtitle}>
+                    {pendingPeriodConfirm.message}
+                  </ThemedText>
+                  <AnimatedPressable
+                    accessibilityRole="button"
+                    onPress={confirmPendingPeriodAction}
+                    style={styles.overlayConfirmButton}>
+                    <ThemedText style={styles.overlayConfirmText}>
+                      {pendingPeriodConfirm.confirmLabel}
+                    </ThemedText>
+                  </AnimatedPressable>
+                  <AnimatedPressable
+                    accessibilityRole="button"
+                    onPress={() => setPendingPeriodConfirm(null)}
+                    style={styles.overlayCancelButton}>
+                    <ThemedText style={styles.overlayCancelText}>Cancel</ThemedText>
+                  </AnimatedPressable>
+                </ThemedView>
+              </Animated.View>
+            ) : null}
+          </View>
+        </Modal>
       </SafeAreaView>
     </ThemedView>
     </Animated.View>
@@ -2902,4 +3011,38 @@ const styles = StyleSheet.create({
   },
   subConfirmButtonText: { color: '#fff', fontSize: 14, fontWeight: '800' },
   disabled: { opacity: 0.55 },
+
+  actionOverlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.four,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  actionPanel: {
+    width: '100%',
+    maxWidth: 360,
+    padding: Spacing.four,
+    borderRadius: Spacing.four,
+    gap: Spacing.two,
+  },
+  actionTitle: { fontSize: 20, fontWeight: '800' },
+  actionSubtitle: { marginBottom: Spacing.one, lineHeight: 19 },
+  overlayConfirmButton: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    backgroundColor: '#1f7a4d',
+  },
+  overlayConfirmText: { color: '#fff', fontSize: 14, fontWeight: '800' },
+  overlayCancelButton: {
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: HAIRLINE,
+  },
+  overlayCancelText: { fontSize: 14, fontWeight: '700' },
 });
