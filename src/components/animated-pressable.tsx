@@ -1,6 +1,8 @@
 import { forwardRef } from 'react';
-import { Pressable, View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, type PressableProps, type StyleProp, type View, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+
+const ReanimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type AnimatedPressableProps = Omit<PressableProps, 'style'> & {
   style?: StyleProp<ViewStyle>;
@@ -11,7 +13,9 @@ type AnimatedPressableProps = Omit<PressableProps, 'style'> & {
 /**
  * Drop-in replacement for Pressable that animates scale + opacity smoothly
  * on press instead of snapping instantly, using reanimated so it stays on
- * the UI thread.
+ * the UI thread. The animated style is applied directly to the Pressable
+ * itself (no wrapper View) so layout props like flex/width still work when
+ * this sits inside a row of buttons.
  */
 export const AnimatedPressable = forwardRef<View, AnimatedPressableProps>(
   function AnimatedPressable(
@@ -27,7 +31,7 @@ export const AnimatedPressable = forwardRef<View, AnimatedPressableProps>(
     }));
 
     return (
-      <Pressable
+      <ReanimatedPressable
         ref={ref}
         {...props}
         onPressIn={(event) => {
@@ -39,9 +43,10 @@ export const AnimatedPressable = forwardRef<View, AnimatedPressableProps>(
           scale.value = withTiming(1, { duration: 180 });
           opacity.value = withTiming(1, { duration: 180 });
           onPressOut?.(event);
-        }}>
-        <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>
-      </Pressable>
+        }}
+        style={[style, animatedStyle]}>
+        {children}
+      </ReanimatedPressable>
     );
   },
 );

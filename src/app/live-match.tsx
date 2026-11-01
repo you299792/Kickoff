@@ -8,7 +8,9 @@ import {
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/animated-pressable';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -775,14 +777,14 @@ export default function LiveMatchScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.topBar}>
-            <Pressable
+            <AnimatedPressable
               accessibilityRole="button"
               accessibilityLabel="Back to home"
               onPress={() => router.replace('/')}
-              style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
+              style={[styles.backButton]}>
               <ThemedText themeColor="textSecondary" style={styles.backText}>‹</ThemedText>
               <ThemedText themeColor="textSecondary">Home</ThemedText>
-            </Pressable>
+            </AnimatedPressable>
             <View
               style={[
                 styles.statusPill,
@@ -863,13 +865,12 @@ export default function LiveMatchScreen() {
                   </View>
                 </View>
                 <View style={styles.scoreCardActions}>
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={toggleTimer}
                     disabled={!isMatchEditable || match.status === 'completed'}
-                    style={({ pressed }) => [
+                    style={[
                       styles.timerButton,
-                      pressed && styles.pressed,
                       (!isMatchEditable || match.status === 'completed') && styles.disabled,
                     ]}>
                     <ThemedText style={styles.timerButtonText}>
@@ -879,8 +880,8 @@ export default function LiveMatchScreen() {
                           ? '▶  Resume clock'
                           : '▶  Start clock'}
                     </ThemedText>
-                  </Pressable>
-                  <Pressable
+                  </AnimatedPressable>
+                  <AnimatedPressable
                     accessibilityRole="button"
                     accessibilityLabel="Log a goal"
                     onPress={() => {
@@ -888,16 +889,15 @@ export default function LiveMatchScreen() {
                       setGoalModalVisible(true);
                     }}
                     disabled={!isMatchEditable || match.status === 'completed'}
-                    style={({ pressed }) => [
+                    style={[
                       styles.goalButton,
-                      pressed && styles.pressed,
                       (!isMatchEditable || match.status === 'completed') && styles.disabled,
                     ]}>
                     <ThemedText style={styles.goalButtonText}>＋  Log a goal</ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 </View>
                 <View style={styles.secondaryActionsRow}>
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     accessibilityLabel="Give a player a card"
                     onPress={() => {
@@ -906,14 +906,13 @@ export default function LiveMatchScreen() {
                       setCardModalVisible(true);
                     }}
                     disabled={!isMatchEditable || match.status === 'completed'}
-                    style={({ pressed }) => [
+                    style={[
                       styles.cardButton,
-                      pressed && styles.pressed,
                       (!isMatchEditable || match.status === 'completed') && styles.disabled,
                     ]}>
                     <ThemedText style={styles.cardButtonText}>▰  Record a card</ThemedText>
-                  </Pressable>
-                  <Pressable
+                  </AnimatedPressable>
+                  <AnimatedPressable
                     accessibilityRole="button"
                     accessibilityLabel="Make a substitution"
                     onPress={() => {
@@ -924,102 +923,95 @@ export default function LiveMatchScreen() {
                       setSubModalVisible(true);
                     }}
                     disabled={!canManageSubstitutions}
-                    style={({ pressed }) => [
+                    style={[
                       styles.cardButton,
-                      pressed && styles.pressed,
                       !canManageSubstitutions && styles.disabled,
                     ]}>
                     <ThemedText style={styles.cardButtonText}>⇄  Substitution</ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 </View>
 
                 {period === 'regulation' && !isSecondHalf ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={endFirstHalf}
                     disabled={match.status === 'completed'}
-                    style={({ pressed }) => [
+                    style={[
                       styles.periodActionButton,
                       styles.periodActionSecondary,
-                      pressed && styles.pressed,
                       match.status === 'completed' && styles.disabled,
                     ]}>
                     <ThemedText style={styles.periodActionSecondaryText}>
                       Proceed to half time
                     </ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
                 {period === 'regulation' && isSecondHalf ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={endMatch}
                     disabled={match.status === 'completed'}
-                    style={({ pressed }) => [
+                    style={[
                       styles.periodActionButton,
                       styles.periodActionSecondary,
-                      pressed && styles.pressed,
                       match.status === 'completed' && styles.disabled,
                     ]}>
                     <ThemedText style={styles.periodActionSecondaryText}>
                       End match and go to full time
                     </ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
                 {period === 'half-time' ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={startSecondHalf}
-                    style={({ pressed }) => [
+                    style={[
                       styles.periodActionButton,
                       styles.periodActionPrimary,
-                      pressed && styles.pressed,
                     ]}>
                     <ThemedText style={styles.periodActionPrimaryText}>
                       Start second half
                     </ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
                 {period === 'extra-time-first' && canEndExtraTimeHalf ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={endExtraTimeFirstHalf}
-                    style={({ pressed }) => [
+                    style={[
                       styles.periodActionButton,
                       styles.periodActionSecondary,
-                      pressed && styles.pressed,
                     ]}>
                     <ThemedText style={styles.periodActionSecondaryText}>
                       End first extra-time half
                     </ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
                 {period === 'extra-time-break' ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={startExtraTimeSecondHalf}
-                    style={({ pressed }) => [
+                    style={[
                       styles.periodActionButton,
                       styles.periodActionPrimary,
-                      pressed && styles.pressed,
                     ]}>
                     <ThemedText style={styles.periodActionPrimaryText}>
                       Start second {extraTimeHalfMinutes}-minute half
                     </ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
                 {period === 'extra-time-second' && canEndExtraTimeHalf ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={endMatch}
-                    style={({ pressed }) => [
+                    style={[
                       styles.periodActionButton,
                       styles.periodActionSecondary,
-                      pressed && styles.pressed,
                     ]}>
                     <ThemedText style={styles.periodActionSecondaryText}>
                       End match
                     </ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
               </ThemedView>
 
@@ -1033,31 +1025,29 @@ export default function LiveMatchScreen() {
                       ? `End the match as a draw or play ${extraTimeHalfMinutes * 2} minutes of extra time in two ${extraTimeHalfMinutes}-minute halves.`
                       : `You can end the match as a draw. Extra time becomes available after ${halfLengthMinutes * 2} minutes.`}
                   </ThemedText>
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={endAsDraw}
-                    style={({ pressed }) => [
+                    style={[
                       styles.periodActionButton,
                       styles.periodActionSecondary,
-                      pressed && styles.pressed,
                     ]}>
                     <ThemedText style={styles.periodActionSecondaryText}>
                       End match as a draw
                     </ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                   {canAddExtraTime ? (
-                    <Pressable
+                    <AnimatedPressable
                       accessibilityRole="button"
                       onPress={startExtraTime}
-                      style={({ pressed }) => [
+                      style={[
                         styles.periodActionButton,
                         styles.periodActionPrimary,
-                        pressed && styles.pressed,
                       ]}>
                       <ThemedText style={styles.periodActionPrimaryText}>
                         Add {extraTimeHalfMinutes * 2} minutes of extra time
                       </ThemedText>
-                    </Pressable>
+                    </AnimatedPressable>
                   ) : null}
                 </ThemedView>
               ) : null}
@@ -1089,18 +1079,17 @@ export default function LiveMatchScreen() {
                   <ThemedText type="small" themeColor="textSecondary">
                     Record a penalty shootout to decide the match.
                   </ThemedText>
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={startPenaltyShootout}
-                    style={({ pressed }) => [
+                    style={[
                       styles.periodActionButton,
                       styles.periodActionPrimary,
-                      pressed && styles.pressed,
                     ]}>
                     <ThemedText style={styles.periodActionPrimaryText}>
                       Proceed to penalty shootout
                     </ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 </ThemedView>
               ) : null}
 
@@ -1151,15 +1140,14 @@ export default function LiveMatchScreen() {
                   !penaltyShootout.firstKickingTeamId ? (
                     <View style={styles.teamChoices}>
                       {[match.homeTeam, match.awayTeam].map((team) => (
-                        <Pressable
+                        <AnimatedPressable
                           key={team.id}
                           accessibilityRole="button"
                           accessibilityLabel={`${team.name} kicks first`}
                           disabled={busy}
                           onPress={() => void selectFirstPenaltyTeam(team.id)}
-                          style={({ pressed }) => [
+                          style={[
                             styles.teamChoice,
-                            pressed && styles.pressed,
                             busy && styles.disabled,
                           ]}>
                           <View style={[styles.choiceBadge, { backgroundColor: team.color }]}>
@@ -1169,7 +1157,7 @@ export default function LiveMatchScreen() {
                           </View>
                           <ThemedText style={styles.choiceTeamName}>{team.name}</ThemedText>
                           <ThemedText themeColor="textSecondary" style={styles.choiceArrow}>›</ThemedText>
-                        </Pressable>
+                        </AnimatedPressable>
                       ))}
                     </View>
                   ) : null}
@@ -1184,17 +1172,16 @@ export default function LiveMatchScreen() {
                           {penaltyTakerOptions.map((player, index) => {
                             const isSelected = activePenaltyTaker === player.name;
                             return (
-                              <Pressable
+                              <AnimatedPressable
                                 key={`${player.number ?? index}-${player.name}`}
                                 accessibilityRole="button"
                                 accessibilityState={{ selected: isSelected, disabled: busy }}
                                 accessibilityLabel={`Select ${player.name} to take the penalty`}
                                 disabled={busy}
                                 onPress={() => setSelectedPenaltyTaker(player.name)}
-                                style={({ pressed }) => [
+                                style={[
                                   styles.penaltyTaker,
                                   isSelected && styles.penaltyTakerSelected,
-                                  pressed && styles.pressed,
                                   busy && styles.disabled,
                                 ]}>
                                 <ThemedText
@@ -1204,7 +1191,7 @@ export default function LiveMatchScreen() {
                                   ]}>
                                   {player.name}
                                 </ThemedText>
-                              </Pressable>
+                              </AnimatedPressable>
                             );
                           })}
                         </View>
@@ -1217,32 +1204,30 @@ export default function LiveMatchScreen() {
                         Taker: {activePenaltyTaker}
                       </ThemedText>
                       <View style={styles.penaltyResultActions}>
-                        <Pressable
+                        <AnimatedPressable
                           accessibilityRole="button"
                           accessibilityLabel="Record penalty scored"
                           disabled={busy}
                           onPress={() => void recordPenaltyKick(true)}
-                          style={({ pressed }) => [
+                          style={[
                             styles.penaltyResultButton,
                             styles.penaltyScoredButton,
-                            pressed && styles.pressed,
                             busy && styles.disabled,
                           ]}>
                           <ThemedText style={styles.penaltyScoredButtonText}>Scored</ThemedText>
-                        </Pressable>
-                        <Pressable
+                        </AnimatedPressable>
+                        <AnimatedPressable
                           accessibilityRole="button"
                           accessibilityLabel="Record penalty missed or saved"
                           disabled={busy}
                           onPress={() => void recordPenaltyKick(false)}
-                          style={({ pressed }) => [
+                          style={[
                             styles.penaltyResultButton,
                             styles.penaltyMissedButton,
-                            pressed && styles.pressed,
                             busy && styles.disabled,
                           ]}>
                           <ThemedText style={styles.penaltyMissedText}>Missed / saved</ThemedText>
-                        </Pressable>
+                        </AnimatedPressable>
                       </View>
                     </>
                   ) : null}
@@ -1301,7 +1286,7 @@ export default function LiveMatchScreen() {
                   </View>
                   <View style={styles.additionalTimeOptions}>
                     {[1, 2, 3, 4, 5].map((minutes) => (
-                      <Pressable
+                      <AnimatedPressable
                         key={minutes}
                         accessibilityRole="button"
                         accessibilityState={{
@@ -1309,11 +1294,10 @@ export default function LiveMatchScreen() {
                         }}
                         accessibilityLabel={`Set first-half added time to ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`}
                         onPress={() => setAdditionalTime('first', minutes)}
-                        style={({ pressed }) => [
+                        style={[
                           styles.additionalTimeOption,
                           match.firstHalfAdditionalMinutes === minutes &&
                             styles.additionalTimeOptionSelected,
-                          pressed && styles.pressed,
                         ]}>
                         <ThemedText
                           style={[
@@ -1323,7 +1307,7 @@ export default function LiveMatchScreen() {
                           ]}>
                           +{minutes}
                         </ThemedText>
-                      </Pressable>
+                      </AnimatedPressable>
                     ))}
                   </View>
                 </ThemedView>
@@ -1349,7 +1333,7 @@ export default function LiveMatchScreen() {
                   </View>
                   <View style={styles.additionalTimeOptions}>
                     {[1, 2, 3, 4, 5].map((minutes) => (
-                      <Pressable
+                      <AnimatedPressable
                         key={minutes}
                         accessibilityRole="button"
                         accessibilityState={{
@@ -1357,11 +1341,10 @@ export default function LiveMatchScreen() {
                         }}
                         accessibilityLabel={`Set second-half added time to ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`}
                         onPress={() => setAdditionalTime('second', minutes)}
-                        style={({ pressed }) => [
+                        style={[
                           styles.additionalTimeOption,
                           match.secondHalfAdditionalMinutes === minutes &&
                             styles.additionalTimeOptionSelected,
-                          pressed && styles.pressed,
                         ]}>
                         <ThemedText
                           style={[
@@ -1371,7 +1354,7 @@ export default function LiveMatchScreen() {
                           ]}>
                           +{minutes}
                         </ThemedText>
-                      </Pressable>
+                      </AnimatedPressable>
                     ))}
                   </View>
                 </ThemedView>
@@ -1385,17 +1368,16 @@ export default function LiveMatchScreen() {
                   </ThemedText>
                 </View>
                 {match.goals.length > 0 ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={undoLastGoal}
                     disabled={!isMatchEditable}
-                    style={({ pressed }) => [
+                    style={[
                       styles.undoButton,
-                      pressed && styles.pressed,
                       !isMatchEditable && styles.disabled,
                     ]}>
                     <ThemedText style={styles.undoText}>Undo last</ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
               </View>
 
@@ -1448,17 +1430,16 @@ export default function LiveMatchScreen() {
                   </ThemedText>
                 </View>
                 {match.cards.length > 0 ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={undoLastCard}
                     disabled={!isMatchEditable}
-                    style={({ pressed }) => [
+                    style={[
                       styles.undoButton,
-                      pressed && styles.pressed,
                       !isMatchEditable && styles.disabled,
                     ]}>
                     <ThemedText style={styles.undoText}>Undo last</ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
               </View>
 
@@ -1511,17 +1492,16 @@ export default function LiveMatchScreen() {
                   </ThemedText>
                 </View>
                 {(match.substitutions ?? []).length > 0 ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={undoLastSubstitution}
                     disabled={match.status === 'completed'}
-                    style={({ pressed }) => [
+                    style={[
                       styles.undoButton,
-                      pressed && styles.pressed,
                       match.status === 'completed' && styles.disabled,
                     ]}>
                     <ThemedText style={styles.undoText}>Undo last</ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
               </View>
 
@@ -1565,12 +1545,12 @@ export default function LiveMatchScreen() {
                 </ThemedView>
               )}
 
-              <Pressable
+              <AnimatedPressable
                 accessibilityRole="button"
                 accessibilityState={{ expanded: showPlayerMinutes }}
                 accessibilityLabel={`Player minutes, ${showPlayerMinutes ? 'expanded' : 'collapsed'}`}
                 onPress={() => setShowPlayerMinutes((current) => !current)}
-                style={({ pressed }) => [styles.sectionHeader, pressed && styles.pressed]}>
+                style={[styles.sectionHeader]}>
                 <View>
                   <ThemedText type="subtitle" style={styles.sectionTitle}>Player minutes</ThemedText>
                   <ThemedText type="small" themeColor="textSecondary">
@@ -1580,7 +1560,7 @@ export default function LiveMatchScreen() {
                 <ThemedText themeColor="textSecondary" style={styles.minutesChevron}>
                   {showPlayerMinutes ? '⌃' : '⌄'}
                 </ThemedText>
-              </Pressable>
+              </AnimatedPressable>
 
               {showPlayerMinutes ? (
                 <View style={styles.minutesSection}>
@@ -1642,19 +1622,18 @@ export default function LiveMatchScreen() {
                 </ThemedView>
               ) : null}
 
-              <Pressable
+              <AnimatedPressable
                 accessibilityRole="button"
                 onPress={saveAndReturn}
                 disabled={busy}
-                style={({ pressed }) => [
+                style={[
                   styles.saveButton,
-                  pressed && styles.pressed,
                   busy && styles.disabled,
                 ]}>
                 <ThemedText style={styles.saveButtonText}>
                   {busy ? 'Saving…' : 'Save match and return home'}
                 </ThemedText>
-              </Pressable>
+              </AnimatedPressable>
             </>
           ) : error ? (
             <ThemedText style={styles.errorText}>{error}</ThemedText>
@@ -1700,86 +1679,90 @@ export default function LiveMatchScreen() {
                   </ThemedText>
                 </View>
                 {selectedScoringTeam ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={() => setSelectedScoringTeam(null)}
                     style={styles.modalBack}>
                     <ThemedText style={styles.modalBackText}>Change team</ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
               </View>
 
-              {!selectedScoringTeam ? (
-                <View style={styles.teamChoices}>
-                  {[match?.homeTeam, match?.awayTeam].filter(
-                    (team): team is MatchTeam => team !== undefined,
-                  ).map((team) => (
-                    <Pressable
-                      key={team.id}
-                      accessibilityRole="button"
-                      onPress={() => setSelectedScoringTeam(team)}
-                      style={({ pressed }) => [
-                        styles.teamChoice,
-                        pressed && styles.pressed,
-                      ]}>
-                      <View style={[styles.choiceBadge, { backgroundColor: team.color }]}>
-                        <ThemedText style={styles.badgeText}>{team.name.slice(0, 2).toUpperCase()}</ThemedText>
-                      </View>
-                      <ThemedText style={styles.choiceTeamName}>{team.name}</ThemedText>
-                      <ThemedText themeColor="textSecondary" style={styles.choiceArrow}>›</ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-              ) : (
-                <ScrollView
-                  style={styles.playerList}
-                  contentContainerStyle={styles.playerListContent}
-                  keyboardShouldPersistTaps="handled">
-                  {selectedPlayers.length > 0 ? (
-                    selectedPlayers.map((player, index) => (
-                      <Pressable
-                        key={`${player.number ?? index}-${player.name}`}
+              <Animated.View
+                key={selectedScoringTeam ? `player-${selectedScoringTeam.id}` : 'team'}
+                entering={FadeIn.duration(180)}
+                exiting={FadeOut.duration(120)}
+                layout={LinearTransition.duration(220)}>
+                {!selectedScoringTeam ? (
+                  <View style={styles.teamChoices}>
+                    {[match?.homeTeam, match?.awayTeam].filter(
+                      (team): team is MatchTeam => team !== undefined,
+                    ).map((team) => (
+                      <AnimatedPressable
+                        key={team.id}
                         accessibilityRole="button"
-                        accessibilityLabel={`Select ${player.name} as scorer for ${selectedScoringTeam.name}`}
-                        disabled={busy}
-                        onPress={() => void recordGoal(player.name)}
-                        style={({ pressed }) => [
-                          styles.playerChoice,
-                          pressed && styles.pressed,
-                          busy && styles.disabled,
+                        onPress={() => setSelectedScoringTeam(team)}
+                        style={[
+                          styles.teamChoice,
                         ]}>
-                        <View style={[styles.playerNumber, { backgroundColor: selectedScoringTeam.color }]}>
-                          <ThemedText style={styles.playerNumberText}>
-                            {player.number ?? index + 1}
-                          </ThemedText>
+                        <View style={[styles.choiceBadge, { backgroundColor: team.color }]}>
+                          <ThemedText style={styles.badgeText}>{team.name.slice(0, 2).toUpperCase()}</ThemedText>
                         </View>
-                        <View style={styles.playerInfo}>
-                          <ThemedText style={styles.playerName}>{player.name}</ThemedText>
-                          <ThemedText type="small" themeColor="textSecondary">
-                            {Object.entries(selectedScoringTeam.lineup).find(
-                              ([, name]) => name === player.name,
-                            )?.[0]?.replaceAll('-', ' ') ?? 'Squad player'}
-                          </ThemedText>
-                        </View>
-                        <ThemedText style={styles.addGoalMark}>＋</ThemedText>
-                      </Pressable>
-                    ))
-                  ) : (
-                    <ThemedText themeColor="textSecondary" style={styles.noPlayers}>
-                      No players have been added to {selectedScoringTeam.name} yet.
-                    </ThemedText>
-                  )}
-                </ScrollView>
-              )}
-              <Pressable
+                        <ThemedText style={styles.choiceTeamName}>{team.name}</ThemedText>
+                        <ThemedText themeColor="textSecondary" style={styles.choiceArrow}>›</ThemedText>
+                      </AnimatedPressable>
+                    ))}
+                  </View>
+                ) : (
+                  <ScrollView
+                    style={styles.playerList}
+                    contentContainerStyle={styles.playerListContent}
+                    keyboardShouldPersistTaps="handled">
+                    {selectedPlayers.length > 0 ? (
+                      selectedPlayers.map((player, index) => (
+                        <AnimatedPressable
+                          key={`${player.number ?? index}-${player.name}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Select ${player.name} as scorer for ${selectedScoringTeam.name}`}
+                          disabled={busy}
+                          onPress={() => void recordGoal(player.name)}
+                          style={[
+                            styles.playerChoice,
+                            busy && styles.disabled,
+                          ]}>
+                          <View style={[styles.playerNumber, { backgroundColor: selectedScoringTeam.color }]}>
+                            <ThemedText style={styles.playerNumberText}>
+                              {player.number ?? index + 1}
+                            </ThemedText>
+                          </View>
+                          <View style={styles.playerInfo}>
+                            <ThemedText style={styles.playerName}>{player.name}</ThemedText>
+                            <ThemedText type="small" themeColor="textSecondary">
+                              {Object.entries(selectedScoringTeam.lineup).find(
+                                ([, name]) => name === player.name,
+                              )?.[0]?.replaceAll('-', ' ') ?? 'Squad player'}
+                            </ThemedText>
+                          </View>
+                          <ThemedText style={styles.addGoalMark}>＋</ThemedText>
+                        </AnimatedPressable>
+                      ))
+                    ) : (
+                      <ThemedText themeColor="textSecondary" style={styles.noPlayers}>
+                        No players have been added to {selectedScoringTeam.name} yet.
+                      </ThemedText>
+                    )}
+                  </ScrollView>
+                )}
+              </Animated.View>
+              <AnimatedPressable
                 accessibilityRole="button"
                 onPress={() => {
                   setGoalModalVisible(false);
                   setSelectedScoringTeam(null);
                 }}
-                style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
+                style={[styles.cancelButton]}>
                 <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
-              </Pressable>
+              </AnimatedPressable>
             </ThemedView>
           </View>
         </Modal>
@@ -1809,15 +1792,14 @@ export default function LiveMatchScreen() {
               {assistOptions.length > 0 ? (
                 <View style={styles.assistChips}>
                   {assistOptions.map((player, index) => (
-                    <Pressable
+                    <AnimatedPressable
                       key={`${player.number ?? index}-${player.name}`}
                       accessibilityRole="button"
                       accessibilityLabel={`${player.name} assisted the goal`}
                       disabled={busy}
                       onPress={() => void recordAssist(player.name)}
-                      style={({ pressed }) => [
+                      style={[
                         styles.assistChip,
-                        pressed && styles.pressed,
                         busy && styles.disabled,
                       ]}>
                       <ThemedText style={styles.assistChipNumber}>
@@ -1826,7 +1808,7 @@ export default function LiveMatchScreen() {
                       <ThemedText style={styles.assistChipName} numberOfLines={1}>
                         {player.name}
                       </ThemedText>
-                    </Pressable>
+                    </AnimatedPressable>
                   ))}
                 </View>
               ) : (
@@ -1834,19 +1816,18 @@ export default function LiveMatchScreen() {
                   No other players available to credit an assist.
                 </ThemedText>
               )}
-              <Pressable
+              <AnimatedPressable
                 accessibilityRole="button"
                 accessibilityLabel="No assist for this goal"
                 onPress={skipAssist}
                 disabled={busy}
-                style={({ pressed }) => [
+                style={[
                   styles.cancelButton,
                   styles.assistSkipButton,
-                  pressed && styles.pressed,
                   busy && styles.disabled,
                 ]}>
                 <ThemedText style={styles.cancelButtonText}>No assist</ThemedText>
-              </Pressable>
+              </AnimatedPressable>
             </ThemedView>
           </View>
         </Modal>
@@ -1886,7 +1867,7 @@ export default function LiveMatchScreen() {
                   </ThemedText>
                 </View>
                 {selectedCardTeam ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={() => {
                       if (selectedCardPlayer) setSelectedCardPlayer(null);
@@ -1894,120 +1875,130 @@ export default function LiveMatchScreen() {
                     }}
                     style={styles.modalBack}>
                     <ThemedText style={styles.modalBackText}>Back</ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
               </View>
 
-              {!selectedCardTeam ? (
-                <View style={styles.teamChoices}>
-                  {[match?.homeTeam, match?.awayTeam]
-                    .filter((team): team is MatchTeam => team !== undefined)
-                    .map((team) => (
-                      <Pressable
-                        key={team.id}
-                        accessibilityRole="button"
-                        onPress={() => setSelectedCardTeam(team)}
-                        style={({ pressed }) => [styles.teamChoice, pressed && styles.pressed]}>
-                        <View style={[styles.choiceBadge, { backgroundColor: team.color }]}>
-                          <ThemedText style={styles.badgeText}>
-                            {team.name.slice(0, 2).toUpperCase()}
-                          </ThemedText>
-                        </View>
-                        <ThemedText style={styles.choiceTeamName}>{team.name}</ThemedText>
-                        <ThemedText themeColor="textSecondary" style={styles.choiceArrow}>›</ThemedText>
-                      </Pressable>
-                    ))}
-                </View>
-              ) : !selectedCardPlayer ? (
-                <ScrollView
-                  style={styles.playerList}
-                  contentContainerStyle={styles.playerListContent}
-                  keyboardShouldPersistTaps="handled">
-                  {getTeamPlayers(selectedCardTeam, match?.substitutions ?? [], match?.cards ?? [])
-                    .length > 0 ? (
-                    getTeamPlayers(
-                      selectedCardTeam,
-                      match?.substitutions ?? [],
-                      match?.cards ?? [],
-                    ).map((player, index) => (
-                      <Pressable
-                        key={`${player.number ?? index}-${player.name}`}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Select ${player.name} for a card`}
-                        onPress={() => setSelectedCardPlayer(player.name)}
-                        style={({ pressed }) => [styles.playerChoice, pressed && styles.pressed]}>
-                        <View
-                          style={[
-                            styles.playerNumber,
-                            { backgroundColor: selectedCardTeam.color },
-                          ]}>
-                          <ThemedText style={styles.playerNumberText}>
-                            {player.number ?? index + 1}
-                          </ThemedText>
-                        </View>
-                        <View style={styles.playerInfo}>
-                          <ThemedText style={styles.playerName}>{player.name}</ThemedText>
-                          <ThemedText type="small" themeColor="textSecondary">
-                            {player.position ?? 'Squad player'}
-                          </ThemedText>
-                        </View>
-                        <ThemedText style={styles.choiceArrow}>›</ThemedText>
-                      </Pressable>
-                    ))
-                  ) : (
-                    <ThemedText themeColor="textSecondary" style={styles.noPlayers}>
-                      No players have been added to {selectedCardTeam.name} yet.
-                    </ThemedText>
-                  )}
-                </ScrollView>
-              ) : (
-                <View style={styles.cardTypeChoices}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Give ${selectedCardPlayer} a yellow card`}
-                    disabled={busy}
-                    onPress={() => recordCard('yellow')}
-                    style={({ pressed }) => [
-                      styles.cardTypeButton,
-                      styles.yellowCardButton,
-                      pressed && styles.pressed,
-                      busy && styles.disabled,
-                    ]}>
-                    <View style={[styles.cardTypeIcon, styles.yellowCard]} />
-                    <View style={styles.cardTypeInfo}>
-                      <ThemedText style={styles.cardTypeTitle}>Yellow card</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">Caution</ThemedText>
-                    </View>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Give ${selectedCardPlayer} a red card`}
-                    disabled={busy}
-                    onPress={() => recordCard('red')}
-                    style={({ pressed }) => [
-                      styles.cardTypeButton,
-                      styles.redCardButton,
-                      pressed && styles.pressed,
-                      busy && styles.disabled,
-                    ]}>
-                    <View style={[styles.cardTypeIcon, styles.redCard]} />
-                    <View style={styles.cardTypeInfo}>
-                      <ThemedText style={styles.cardTypeTitle}>Red card</ThemedText>
-                      <ThemedText type="small" themeColor="textSecondary">Send off</ThemedText>
-                    </View>
-                  </Pressable>
-                </View>
-              )}
-              <Pressable
+              <Animated.View
+                key={
+                  selectedCardPlayer
+                    ? `cardtype-${selectedCardPlayer}`
+                    : selectedCardTeam
+                      ? `player-${selectedCardTeam.id}`
+                      : 'team'
+                }
+                entering={FadeIn.duration(180)}
+                exiting={FadeOut.duration(120)}
+                layout={LinearTransition.duration(220)}>
+                {!selectedCardTeam ? (
+                  <View style={styles.teamChoices}>
+                    {[match?.homeTeam, match?.awayTeam]
+                      .filter((team): team is MatchTeam => team !== undefined)
+                      .map((team) => (
+                        <AnimatedPressable
+                          key={team.id}
+                          accessibilityRole="button"
+                          onPress={() => setSelectedCardTeam(team)}
+                          style={[styles.teamChoice]}>
+                          <View style={[styles.choiceBadge, { backgroundColor: team.color }]}>
+                            <ThemedText style={styles.badgeText}>
+                              {team.name.slice(0, 2).toUpperCase()}
+                            </ThemedText>
+                          </View>
+                          <ThemedText style={styles.choiceTeamName}>{team.name}</ThemedText>
+                          <ThemedText themeColor="textSecondary" style={styles.choiceArrow}>›</ThemedText>
+                        </AnimatedPressable>
+                      ))}
+                  </View>
+                ) : !selectedCardPlayer ? (
+                  <ScrollView
+                    style={styles.playerList}
+                    contentContainerStyle={styles.playerListContent}
+                    keyboardShouldPersistTaps="handled">
+                    {getTeamPlayers(selectedCardTeam, match?.substitutions ?? [], match?.cards ?? [])
+                      .length > 0 ? (
+                      getTeamPlayers(
+                        selectedCardTeam,
+                        match?.substitutions ?? [],
+                        match?.cards ?? [],
+                      ).map((player, index) => (
+                        <AnimatedPressable
+                          key={`${player.number ?? index}-${player.name}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Select ${player.name} for a card`}
+                          onPress={() => setSelectedCardPlayer(player.name)}
+                          style={[styles.playerChoice]}>
+                          <View
+                            style={[
+                              styles.playerNumber,
+                              { backgroundColor: selectedCardTeam.color },
+                            ]}>
+                            <ThemedText style={styles.playerNumberText}>
+                              {player.number ?? index + 1}
+                            </ThemedText>
+                          </View>
+                          <View style={styles.playerInfo}>
+                            <ThemedText style={styles.playerName}>{player.name}</ThemedText>
+                            <ThemedText type="small" themeColor="textSecondary">
+                              {player.position ?? 'Squad player'}
+                            </ThemedText>
+                          </View>
+                          <ThemedText style={styles.choiceArrow}>›</ThemedText>
+                        </AnimatedPressable>
+                      ))
+                    ) : (
+                      <ThemedText themeColor="textSecondary" style={styles.noPlayers}>
+                        No players have been added to {selectedCardTeam.name} yet.
+                      </ThemedText>
+                    )}
+                  </ScrollView>
+                ) : (
+                  <View style={styles.cardTypeChoices}>
+                    <AnimatedPressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Give ${selectedCardPlayer} a yellow card`}
+                      disabled={busy}
+                      onPress={() => recordCard('yellow')}
+                      style={[
+                        styles.cardTypeButton,
+                        styles.yellowCardButton,
+                        busy && styles.disabled,
+                      ]}>
+                      <View style={[styles.cardTypeIcon, styles.yellowCard]} />
+                      <View style={styles.cardTypeInfo}>
+                        <ThemedText style={styles.cardTypeTitle}>Yellow card</ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary">Caution</ThemedText>
+                      </View>
+                    </AnimatedPressable>
+                    <AnimatedPressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Give ${selectedCardPlayer} a red card`}
+                      disabled={busy}
+                      onPress={() => recordCard('red')}
+                      style={[
+                        styles.cardTypeButton,
+                        styles.redCardButton,
+                        busy && styles.disabled,
+                      ]}>
+                      <View style={[styles.cardTypeIcon, styles.redCard]} />
+                      <View style={styles.cardTypeInfo}>
+                        <ThemedText style={styles.cardTypeTitle}>Red card</ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary">Send off</ThemedText>
+                      </View>
+                    </AnimatedPressable>
+                  </View>
+                )}
+              </Animated.View>
+              <AnimatedPressable
                 accessibilityRole="button"
                 onPress={() => {
                   setCardModalVisible(false);
                   setSelectedCardTeam(null);
                   setSelectedCardPlayer(null);
                 }}
-                style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
+                style={[styles.cancelButton]}>
                 <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
-              </Pressable>
+              </AnimatedPressable>
             </ThemedView>
           </View>
         </Modal>
@@ -2040,32 +2031,37 @@ export default function LiveMatchScreen() {
                   </ThemedText>
                 </View>
                 {subPlayerOut ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={() => setSubPlayerOut(null)}
                     style={styles.modalBack}>
                     <ThemedText style={styles.modalBackText}>Back</ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : subTeam && pendingSubs.length === 0 ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={() => setSubTeam(null)}
                     style={styles.modalBack}>
                     <ThemedText style={styles.modalBackText}>Back</ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
               </View>
 
+              <Animated.View
+                key={subTeam ? `team-${subTeam.id}` : 'noteam'}
+                entering={FadeIn.duration(180)}
+                exiting={FadeOut.duration(120)}
+                layout={LinearTransition.duration(220)}>
               {!subTeam ? (
                 <View style={styles.teamChoices}>
                   {[match?.homeTeam, match?.awayTeam]
                     .filter((team): team is MatchTeam => team !== undefined)
                     .map((team) => (
-                      <Pressable
+                      <AnimatedPressable
                         key={team.id}
                         accessibilityRole="button"
                         onPress={() => setSubTeam(team)}
-                        style={({ pressed }) => [styles.teamChoice, pressed && styles.pressed]}>
+                        style={[styles.teamChoice]}>
                         <View style={[styles.choiceBadge, { backgroundColor: team.color }]}>
                           <ThemedText style={styles.badgeText}>
                             {team.name.slice(0, 2).toUpperCase()}
@@ -2073,7 +2069,7 @@ export default function LiveMatchScreen() {
                         </View>
                         <ThemedText style={styles.choiceTeamName}>{team.name}</ThemedText>
                         <ThemedText themeColor="textSecondary" style={styles.choiceArrow}>›</ThemedText>
-                      </Pressable>
+                      </AnimatedPressable>
                     ))}
                 </View>
               ) : (
@@ -2099,19 +2095,24 @@ export default function LiveMatchScreen() {
                             {pending.playerInName} for {pending.playerOutName}
                             {pending.isConcussion ? ' (concussion)' : ''}
                           </ThemedText>
-                          <Pressable
+                          <AnimatedPressable
                             accessibilityRole="button"
                             accessibilityLabel={`Remove pending substitution of ${pending.playerInName} for ${pending.playerOutName}`}
                             onPress={() => removePendingSubstitution(pending.id)}
                             hitSlop={8}
-                            style={({ pressed }) => [pressed && styles.pressed]}>
+                            style={[]}>
                             <ThemedText style={styles.subPendingRemove}>×</ThemedText>
-                          </Pressable>
+                          </AnimatedPressable>
                         </View>
                       ))}
                     </View>
                   ) : null}
 
+                  <Animated.View
+                    key={subPlayerOut ? `playerin-${subPlayerOut}` : 'playerout'}
+                    entering={FadeIn.duration(180)}
+                    exiting={FadeOut.duration(120)}
+                    layout={LinearTransition.duration(220)}>
                   {!subPlayerOut ? (
                     <ScrollView
                       style={styles.playerList}
@@ -2119,7 +2120,7 @@ export default function LiveMatchScreen() {
                       keyboardShouldPersistTaps="handled">
                       {subOnPitchOptions.length > 0 ? (
                         subOnPitchOptions.map((player, index) => (
-                          <Pressable
+                          <AnimatedPressable
                             key={`${player.number ?? index}-${player.name}`}
                             accessibilityRole="button"
                             accessibilityLabel={`${player.name} going off`}
@@ -2127,7 +2128,7 @@ export default function LiveMatchScreen() {
                               setSubPlayerOut(player.name);
                               if (!canAddNormalSub) setSubIsConcussion(true);
                             }}
-                            style={({ pressed }) => [styles.playerChoice, pressed && styles.pressed]}>
+                            style={[styles.playerChoice]}>
                             <View
                               style={[styles.playerNumber, { backgroundColor: subTeam.color }]}>
                               <ThemedText style={styles.playerNumberText}>
@@ -2141,7 +2142,7 @@ export default function LiveMatchScreen() {
                               </ThemedText>
                             </View>
                             <ThemedText style={styles.choiceArrow}>›</ThemedText>
-                          </Pressable>
+                          </AnimatedPressable>
                         ))
                       ) : (
                         <ThemedText themeColor="textSecondary" style={styles.noPlayers}>
@@ -2151,16 +2152,15 @@ export default function LiveMatchScreen() {
                     </ScrollView>
                   ) : (
                     <>
-                      <Pressable
+                      <AnimatedPressable
                         accessibilityRole="button"
                         accessibilityState={{ selected: subIsConcussion, disabled: !canAddNormalSub }}
                         accessibilityLabel="Mark as a concussion substitute"
                         disabled={!canAddNormalSub}
                         onPress={() => setSubIsConcussion((current) => !current)}
-                        style={({ pressed }) => [
+                        style={[
                           styles.subConcussionToggle,
                           subIsConcussion && styles.subConcussionToggleActive,
-                          pressed && styles.pressed,
                           !canAddNormalSub && styles.disabled,
                         ]}>
                         <View
@@ -2177,21 +2177,20 @@ export default function LiveMatchScreen() {
                             ? "Concussion substitute (doesn't count toward limits)"
                             : 'Concussion substitute (required — limit reached)'}
                         </ThemedText>
-                      </Pressable>
+                      </AnimatedPressable>
                       <ScrollView
                         style={styles.playerList}
                         contentContainerStyle={styles.playerListContent}
                         keyboardShouldPersistTaps="handled">
                         {subReserveOptions.length > 0 ? (
                           subReserveOptions.map((player, index) => (
-                            <Pressable
+                            <AnimatedPressable
                               key={`${player.number ?? index}-${player.name}`}
                               accessibilityRole="button"
                               accessibilityLabel={`${player.name} coming on`}
                               onPress={() => addPendingSubstitution(player.name)}
-                              style={({ pressed }) => [
+                              style={[
                                 styles.playerChoice,
-                                pressed && styles.pressed,
                               ]}>
                               <View
                                 style={[styles.playerNumber, { backgroundColor: subTeam.color }]}>
@@ -2206,7 +2205,7 @@ export default function LiveMatchScreen() {
                                 </ThemedText>
                               </View>
                               <ThemedText style={styles.addGoalMark}>＋</ThemedText>
-                            </Pressable>
+                            </AnimatedPressable>
                           ))
                         ) : (
                           <ThemedText themeColor="textSecondary" style={styles.noPlayers}>
@@ -2216,31 +2215,32 @@ export default function LiveMatchScreen() {
                       </ScrollView>
                     </>
                   )}
+                  </Animated.View>
 
                   {pendingSubs.length > 0 && !subPlayerOut ? (
-                    <Pressable
+                    <AnimatedPressable
                       accessibilityRole="button"
                       accessibilityLabel={`Confirm ${pendingSubs.length} substitution${pendingSubs.length === 1 ? '' : 's'}`}
                       disabled={busy}
                       onPress={() => void confirmSubstitutions()}
-                      style={({ pressed }) => [
+                      style={[
                         styles.subConfirmButton,
-                        pressed && styles.pressed,
                         busy && styles.disabled,
                       ]}>
                       <ThemedText style={styles.subConfirmButtonText}>
                         Confirm {pendingSubs.length} substitution{pendingSubs.length === 1 ? '' : 's'}
                       </ThemedText>
-                    </Pressable>
+                    </AnimatedPressable>
                   ) : null}
                 </>
               )}
-              <Pressable
+              </Animated.View>
+              <AnimatedPressable
                 accessibilityRole="button"
                 onPress={closeSubModal}
-                style={({ pressed }) => [styles.cancelButton, pressed && styles.pressed]}>
+                style={[styles.cancelButton]}>
                 <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
-              </Pressable>
+              </AnimatedPressable>
             </ThemedView>
           </View>
         </Modal>
@@ -2899,5 +2899,4 @@ const styles = StyleSheet.create({
   },
   subConfirmButtonText: { color: '#fff', fontSize: 14, fontWeight: '800' },
   disabled: { opacity: 0.55 },
-  pressed: { opacity: 0.65 },
 });
