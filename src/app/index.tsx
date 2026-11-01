@@ -2,6 +2,7 @@ import { Fragment, useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { AnimatedPressable } from '@/components/animated-pressable';
 import { ThemedText } from '@/components/themed-text';
@@ -317,6 +318,7 @@ export default function HomeScreen() {
   }
 
   return (
+    <Animated.View entering={FadeIn.duration(280)} style={styles.screenEntrance}>
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <ScrollView
@@ -767,10 +769,14 @@ export default function HomeScreen() {
         </Modal>
       </SafeAreaView>
     </ThemedView>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  screenEntrance: {
+    flex: 1,
+  },
   container: {
     flex: 1,
   },

@@ -1,4 +1,4 @@
-import { createElement, useCallback, useState } from 'react';
+import { createElement, useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
@@ -13,7 +13,24 @@ import {
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInLeft,
+  FadeInRight,
+  FadeInUp,
+  FadeOut,
+  FadeOutLeft,
+  FadeOutRight,
+  LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  ZoomIn,
+} from 'react-native-reanimated';
 
+import { AnimatedPressable } from '@/components/animated-pressable';
+import { ChevronIcon } from '@/components/chevron-icon';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -63,6 +80,7 @@ export default function NewMatchScreen() {
   const [selectedOpponentId, setSelectedOpponentId] = useState('');
   const [openTeamDropdown, setOpenTeamDropdown] = useState<'home' | 'opponent' | null>(null);
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+  const [stepDirection, setStepDirection] = useState<'forward' | 'backward'>('forward');
   const [matchLineups, setMatchLineups] = useState<MatchLineups>({});
   const [openLineupSlot, setOpenLineupSlot] = useState<string | null>(null);
   const [competition, setCompetition] = useState('League');
@@ -207,7 +225,13 @@ export default function NewMatchScreen() {
       [selectedOpponent.id]: current[selectedOpponent.id] ?? { ...selectedOpponent.lineup },
     }));
     setOpenLineupSlot(null);
+    setStepDirection('forward');
     setCurrentStep(2);
+  }
+
+  function goBackStep() {
+    setStepDirection('backward');
+    setCurrentStep((step) => (step === 3 ? 2 : 1));
   }
 
   async function saveFixture(status: MatchFixture['status']) {
@@ -276,22 +300,23 @@ export default function NewMatchScreen() {
             contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled">
-            <View style={styles.header}>
-              <Pressable
+            <Animated.View entering={FadeInDown.duration(320)} style={styles.header}>
+              <AnimatedPressable
+                scaleTo={0.94}
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
                 onPress={() => {
                   if (currentStep === 1) router.back();
-                  else setCurrentStep(currentStep === 3 ? 2 : 1);
+                  else goBackStep();
                 }}
-                style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
+                style={styles.backButton}>
                 <ThemedText themeColor="textSecondary" style={styles.backIcon}>
                   {'<'}
                 </ThemedText>
                 <ThemedText themeColor="textSecondary" style={styles.backText}>
                   Back
                 </ThemedText>
-              </Pressable>
+              </AnimatedPressable>
 
               <ThemedText type="title" style={styles.title}>
                 {currentStep === 1
@@ -309,11 +334,11 @@ export default function NewMatchScreen() {
               </ThemedText>
 
               <View style={styles.stepIndicator}>
-                <View style={[styles.stepDot, styles.stepDotActive]} />
+                <StepDot active />
                 <View style={styles.stepLine} />
-                <View style={[styles.stepDot, currentStep >= 2 && styles.stepDotActive]} />
+                <StepDot active={currentStep >= 2} />
                 <View style={styles.stepLine} />
-                <View style={[styles.stepDot, currentStep === 3 && styles.stepDotActive]} />
+                <StepDot active={currentStep === 3} />
               </View>
               <ThemedText type="small" themeColor="textSecondary" style={styles.stepCaption}>
                 {currentStep === 1
@@ -322,8 +347,21 @@ export default function NewMatchScreen() {
                     ? 'Step 2 of 3 - Starting lineups'
                     : 'Step 3 of 3 - Match review'}
               </ThemedText>
-            </View>
+            </Animated.View>
 
+            <Animated.View
+              key={currentStep}
+              entering={
+                stepDirection === 'forward'
+                  ? FadeInRight.duration(260)
+                  : FadeInLeft.duration(260)
+              }
+              exiting={
+                stepDirection === 'forward'
+                  ? FadeOutLeft.duration(180)
+                  : FadeOutRight.duration(180)
+              }
+              layout={LinearTransition.duration(240)}>
             {currentStep === 1 ? (
               <>
             {/* 1. Your team */}
@@ -419,17 +457,14 @@ export default function NewMatchScreen() {
                 {MATCH_FORMATS.map((format) => {
                   const selected = format.id === matchFormatId;
                   return (
-                    <Pressable
+                    <AnimatedPressable
                       key={format.id}
+                      scaleTo={0.98}
                       accessibilityRole="radio"
                       accessibilityState={{ selected }}
                       accessibilityLabel={`${format.label}, ${format.halfMinutes * 2} minutes`}
                       onPress={() => setMatchFormatId(format.id)}
-                      style={({ pressed }) => [
-                        styles.formatOption,
-                        selected && styles.formatOptionSelected,
-                        pressed && styles.pressed,
-                      ]}>
+                      style={[styles.formatOption, selected && styles.formatOptionSelected]}>
                       <View style={[styles.durationIcon, selected && styles.durationIconSelected]}>
                         <ThemedText
                           style={[
@@ -446,9 +481,11 @@ export default function NewMatchScreen() {
                         </ThemedText>
                       </View>
                       <View style={[styles.radio, selected && styles.radioSelected]}>
-                        {selected ? <View style={styles.radioDot} /> : null}
+                        {selected ? (
+                          <Animated.View entering={ZoomIn.duration(160)} style={styles.radioDot} />
+                        ) : null}
                       </View>
-                    </Pressable>
+                    </AnimatedPressable>
                   );
                 })}
               </View>
@@ -494,55 +531,53 @@ export default function NewMatchScreen() {
             </FormSection>
 
             {teamsError ? (
-              <View style={styles.errorBox}>
+              <Animated.View entering={FadeIn.duration(200)} style={styles.errorBox}>
                 <ThemedText style={styles.errorIcon}>!</ThemedText>
                 <ThemedText style={styles.errorText}>{teamsError}</ThemedText>
-              </View>
+              </Animated.View>
             ) : null}
 
             {error ? (
-              <View style={styles.errorBox}>
+              <Animated.View entering={FadeIn.duration(200)} style={styles.errorBox}>
                 <ThemedText style={styles.errorIcon}>!</ThemedText>
                 <ThemedText style={styles.errorText}>{error}</ThemedText>
-              </View>
+              </Animated.View>
             ) : null}
 
-            <Pressable
+            <AnimatedPressable
               accessibilityRole="button"
               accessibilityLabel="Next step"
               onPress={goToNext}
-              style={({ pressed }) => [
-                styles.contentNextButton,
-                pressed && styles.buttonPressed,
-              ]}>
+              style={styles.contentNextButton}>
               <ThemedText style={styles.saveButtonText}>Next</ThemedText>
               <ThemedText style={styles.saveButtonIcon}>-&gt;</ThemedText>
-            </Pressable>
+            </AnimatedPressable>
               </>
             ) : currentStep === 2 && selectedTeam && selectedOpponent ? (
               <>
                 <ThemedText type="small" themeColor="textSecondary" style={styles.matchOnlyNotice}>
                   Changes here apply to this match only. Your saved team lineups will not be changed.
                 </ThemedText>
-                {[selectedTeam, selectedOpponent].map((team) => (
-                  <TeamLineupEditor
-                    key={team.id}
-                    team={team}
-                    lineup={matchLineups[team.id] ?? team.lineup}
-                    onSelectSlot={(slotId) => setOpenLineupSlot(`${team.id}:${slotId}`)}
-                  />
+                {[selectedTeam, selectedOpponent].map((team, teamIndex) => (
+                  <Animated.View key={team.id} entering={FadeInUp.delay(teamIndex * 80).duration(300)}>
+                    <TeamLineupEditor
+                      team={team}
+                      lineup={matchLineups[team.id] ?? team.lineup}
+                      onSelectSlot={(slotId) => setOpenLineupSlot(`${team.id}:${slotId}`)}
+                    />
+                  </Animated.View>
                 ))}
-                <Pressable
+                <AnimatedPressable
                   accessibilityRole="button"
                   accessibilityLabel="Continue to match review"
-                  onPress={() => setCurrentStep(3)}
-                  style={({ pressed }) => [
-                    styles.contentNextButton,
-                    pressed && styles.buttonPressed,
-                  ]}>
+                  onPress={() => {
+                    setStepDirection('forward');
+                    setCurrentStep(3);
+                  }}
+                  style={styles.contentNextButton}>
                   <ThemedText style={styles.saveButtonText}>Next</ThemedText>
                   <ThemedText style={styles.saveButtonIcon}>-&gt;</ThemedText>
-                </Pressable>
+                </AnimatedPressable>
               </>
             ) : currentStep === 3 && selectedTeam && selectedOpponent ? (
               <>
@@ -597,36 +632,34 @@ export default function NewMatchScreen() {
                   </View>
                 ) : null}
                 <View style={styles.matchReviewActions}>
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     accessibilityLabel="Start match"
                     accessibilityState={{ disabled: savingMatch }}
                     disabled={savingMatch}
                     onPress={() => void saveFixture('in-progress')}
-                    style={({ pressed }) => [
-                      styles.contentNextButton,
-                      pressed && styles.buttonPressed,
-                    ]}>
+                    style={[styles.contentNextButton, savingMatch && styles.buttonPressed]}>
                     <ThemedText style={styles.saveButtonText}>
                       {savingMatch ? 'Saving…' : 'Start match'}
                     </ThemedText>
-                  </Pressable>
-                  <Pressable
+                  </AnimatedPressable>
+                  <AnimatedPressable
                     accessibilityRole="button"
                     accessibilityLabel="Save fixture for later"
                     accessibilityState={{ disabled: savingMatch }}
                     disabled={savingMatch}
                     onPress={() => void saveFixture('scheduled')}
-                    style={({ pressed }) => [
+                    style={[
                       styles.matchReviewEditButton,
                       styles.matchReviewLineupAction,
-                      pressed && styles.buttonPressed,
+                      savingMatch && styles.buttonPressed,
                     ]}>
                     <ThemedText style={styles.matchReviewEditText}>Save for later</ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 </View>
               </>
             ) : null}
+            </Animated.View>
           </ScrollView>
 
           <Modal
@@ -641,6 +674,9 @@ export default function NewMatchScreen() {
                 onPress={() => setOpenLineupSlot(null)}
                 style={StyleSheet.absoluteFill}
               />
+              <Animated.View
+                entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
+                exiting={FadeOut.duration(140)}>
               <ThemedView type="backgroundElement" style={styles.lineupPickerCard}>
                 <View style={styles.lineupPickerHeader}>
                   <View style={styles.lineupPickerHeading}>
@@ -655,7 +691,8 @@ export default function NewMatchScreen() {
                         : 'Choose a reserve player for this position.'}
                     </ThemedText>
                   </View>
-                  <Pressable
+                  <AnimatedPressable
+                    scaleTo={0.85}
                     accessibilityRole="button"
                     accessibilityLabel="Close lineup player selection"
                     onPress={() => setOpenLineupSlot(null)}
@@ -664,7 +701,7 @@ export default function NewMatchScreen() {
                     <ThemedText themeColor="textSecondary" style={styles.lineupPickerCloseText}>
                       ×
                     </ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 </View>
 
                 {currentMatchStarter ? (
@@ -686,16 +723,13 @@ export default function NewMatchScreen() {
                         Current starter · {currentMatchStarter.position}
                       </ThemedText>
                     </View>
-                    <Pressable
+                    <AnimatedPressable
                       accessibilityRole="button"
                       accessibilityLabel={`Keep ${currentMatchStarter.name} in this position`}
                       onPress={() => setOpenLineupSlot(null)}
-                      style={({ pressed }) => [
-                        styles.keepMatchStarterButton,
-                        pressed && styles.buttonPressed,
-                      ]}>
+                      style={styles.keepMatchStarterButton}>
                       <ThemedText style={styles.keepMatchStarterText}>Keep</ThemedText>
-                    </Pressable>
+                    </AnimatedPressable>
                   </View>
                 ) : null}
 
@@ -708,43 +742,44 @@ export default function NewMatchScreen() {
                 <ScrollView
                   style={styles.matchReserveList}
                   keyboardShouldPersistTaps="handled">
-                  {matchReservePlayers.map((player) => (
-                    <Pressable
+                  {matchReservePlayers.map((player, reserveIndex) => (
+                    <Animated.View
                       key={`${player.number}-${player.name}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Replace current starter with ${player.name}, ${player.position}`}
-                      onPress={() => {
-                        if (lineupPicker) {
-                          updateMatchLineup(
-                            lineupPicker.team,
-                            lineupPicker.slot.id,
-                            player.name,
-                          );
-                        }
-                      }}
-                      style={({ pressed }) => [
-                        styles.matchReserveOption,
-                        pressed && styles.buttonPressed,
-                      ]}>
-                      <View
-                        style={[
-                          styles.matchReserveBadge,
-                          { backgroundColor: lineupPicker?.team.color ?? '#1f7a4d' },
-                        ]}>
-                        <ThemedText style={styles.matchReserveBadgeText}>
-                          {player.number}
-                        </ThemedText>
-                      </View>
-                      <View style={styles.matchReserveInfo}>
-                        <ThemedText style={styles.matchReserveName} numberOfLines={1}>
-                          {player.name}
-                        </ThemedText>
-                        <ThemedText themeColor="textSecondary" style={styles.matchReservePosition}>
-                          {player.position}
-                        </ThemedText>
-                      </View>
-                      <ThemedText style={styles.matchReserveReplaceIcon}>↗</ThemedText>
-                    </Pressable>
+                      entering={FadeInUp.delay(Math.min(reserveIndex, 10) * 35).duration(220)}>
+                      <AnimatedPressable
+                        scaleTo={0.98}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Replace current starter with ${player.name}, ${player.position}`}
+                        onPress={() => {
+                          if (lineupPicker) {
+                            updateMatchLineup(
+                              lineupPicker.team,
+                              lineupPicker.slot.id,
+                              player.name,
+                            );
+                          }
+                        }}
+                        style={styles.matchReserveOption}>
+                        <View
+                          style={[
+                            styles.matchReserveBadge,
+                            { backgroundColor: lineupPicker?.team.color ?? '#1f7a4d' },
+                          ]}>
+                          <ThemedText style={styles.matchReserveBadgeText}>
+                            {player.number}
+                          </ThemedText>
+                        </View>
+                        <View style={styles.matchReserveInfo}>
+                          <ThemedText style={styles.matchReserveName} numberOfLines={1}>
+                            {player.name}
+                          </ThemedText>
+                          <ThemedText themeColor="textSecondary" style={styles.matchReservePosition}>
+                            {player.position}
+                          </ThemedText>
+                        </View>
+                        <ThemedText style={styles.matchReserveReplaceIcon}>↗</ThemedText>
+                      </AnimatedPressable>
+                    </Animated.View>
                   ))}
                   {matchReservePlayers.length === 0 ? (
                     <ThemedText
@@ -758,21 +793,19 @@ export default function NewMatchScreen() {
                   ) : null}
                 </ScrollView>
                 {currentMatchStarter && lineupPicker ? (
-                  <Pressable
+                  <AnimatedPressable
                     accessibilityRole="button"
                     onPress={() =>
                       updateMatchLineup(lineupPicker.team, lineupPicker.slot.id, '')
                     }
-                    style={({ pressed }) => [
-                      styles.clearMatchPosition,
-                      pressed && styles.buttonPressed,
-                    ]}>
+                    style={styles.clearMatchPosition}>
                     <ThemedText style={styles.clearMatchPositionText}>
                       Leave position empty
                     </ThemedText>
-                  </Pressable>
+                  </AnimatedPressable>
                 ) : null}
               </ThemedView>
+              </Animated.View>
             </View>
           </Modal>
         </KeyboardAvoidingView>
@@ -783,6 +816,21 @@ export default function NewMatchScreen() {
 
 /* ---------- Reusable components ---------- */
 
+function StepDot({ active }: { active: boolean }) {
+  const progress = useSharedValue(active ? 1 : 0);
+
+  useEffect(() => {
+    progress.value = withSpring(active ? 1 : 0, { damping: 14, stiffness: 180 });
+  }, [active, progress]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: active ? '#1f7a4d' : HAIRLINE,
+    transform: [{ scale: 1 + progress.value * 0.25 }],
+  }));
+
+  return <Animated.View style={[styles.stepDot, animatedStyle]} />;
+}
+
 type FormSectionProps = {
   step: string;
   title: string;
@@ -792,26 +840,30 @@ type FormSectionProps = {
 };
 
 function FormSection({ step, title, required, description, children }: FormSectionProps) {
+  const delay = Math.min(Number(step) || 0, 6) * 70;
+
   return (
-    <ThemedView type="backgroundElement" style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <View style={styles.stepBadge}>
-          <ThemedText style={styles.stepBadgeText}>{step}</ThemedText>
-        </View>
-        <View style={styles.sectionHeaderText}>
-          <ThemedText type="subtitle" style={styles.sectionTitle}>
-            {title}
-            {required ? <ThemedText style={styles.required}> *</ThemedText> : null}
-          </ThemedText>
-          {description ? (
-            <ThemedText type="small" themeColor="textSecondary" style={styles.sectionDescription}>
-              {description}
+    <Animated.View entering={FadeInUp.delay(delay).duration(320)}>
+      <ThemedView type="backgroundElement" style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <View style={styles.stepBadge}>
+            <ThemedText style={styles.stepBadgeText}>{step}</ThemedText>
+          </View>
+          <View style={styles.sectionHeaderText}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              {title}
+              {required ? <ThemedText style={styles.required}> *</ThemedText> : null}
             </ThemedText>
-          ) : null}
+            {description ? (
+              <ThemedText type="small" themeColor="textSecondary" style={styles.sectionDescription}>
+                {description}
+              </ThemedText>
+            ) : null}
+          </View>
         </View>
-      </View>
-      <View style={styles.sectionBody}>{children}</View>
-    </ThemedView>
+        <View style={styles.sectionBody}>{children}</View>
+      </ThemedView>
+    </Animated.View>
   );
 }
 
@@ -838,20 +890,26 @@ function TeamDropdown({
   onToggle,
   onSelect,
 }: TeamDropdownProps) {
+  const colors = useTheme();
+
   return (
     <View style={styles.teamDropdown}>
-      <Pressable
+      <AnimatedPressable
+        scaleTo={0.985}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         accessibilityLabel={selectedTeam?.name ?? placeholder}
         onPress={onToggle}
-        style={({ pressed }) => [styles.teamDropdownTrigger, pressed && styles.pressed]}>
+        style={styles.teamDropdownTrigger}>
         {selectedTeam ? (
-          <View style={[styles.teamBadge, { backgroundColor: selectedTeam.color }]}>
+          <Animated.View
+            key={selectedTeam.id}
+            entering={ZoomIn.duration(180)}
+            style={[styles.teamBadge, { backgroundColor: selectedTeam.color }]}>
             <ThemedText style={styles.teamBadgeText}>
               {selectedTeam.name.slice(0, 2).toUpperCase()}
             </ThemedText>
-          </View>
+          </Animated.View>
         ) : null}
         <ThemedText
           themeColor={selectedTeam ? undefined : 'textSecondary'}
@@ -859,50 +917,56 @@ function TeamDropdown({
           numberOfLines={1}>
           {selectedTeam?.name ?? placeholder}
         </ThemedText>
-        <ThemedText themeColor="textSecondary" style={styles.dropdownIndicator}>
-          {expanded ? '⌃' : '⌄'}
-        </ThemedText>
-      </Pressable>
+        <View style={styles.dropdownIndicator}>
+          <ChevronIcon expanded={expanded} color={colors.textSecondary} />
+        </View>
+      </AnimatedPressable>
       {expanded ? (
-        <View style={styles.teamDropdownMenu}>
-          {teams.map((team) => (
+        <Animated.View
+          entering={FadeIn.duration(200)}
+          exiting={FadeOut.duration(140)}
+          layout={LinearTransition.duration(200)}
+          style={styles.teamDropdownMenu}>
+          {teams.map((team, teamOptionIndex) => (
             <TeamOption
               key={team.id}
               team={team}
+              index={teamOptionIndex}
               selected={team.id === selectedTeam?.id}
               onPress={() => onSelect(team.id)}
             />
           ))}
-        </View>
+        </Animated.View>
       ) : null}
     </View>
   );
 }
 
-function TeamOption({ team, selected, onPress }: TeamOptionProps) {
+function TeamOption({ team, selected, onPress, index = 0 }: TeamOptionProps & { index?: number }) {
   return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      accessibilityLabel={team.name}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.teamOption,
-        selected && styles.teamOptionSelected,
-        pressed && styles.pressed,
-      ]}>
-      <View style={[styles.teamBadge, { backgroundColor: team.color }]}>
-        <ThemedText style={styles.teamBadgeText}>
-          {team.name.slice(0, 2).toUpperCase()}
+    <Animated.View entering={FadeInDown.delay(index * 40).duration(200)}>
+      <AnimatedPressable
+        scaleTo={0.97}
+        accessibilityRole="radio"
+        accessibilityState={{ selected }}
+        accessibilityLabel={team.name}
+        onPress={onPress}
+        style={[styles.teamOption, selected && styles.teamOptionSelected]}>
+        <View style={[styles.teamBadge, { backgroundColor: team.color }]}>
+          <ThemedText style={styles.teamBadgeText}>
+            {team.name.slice(0, 2).toUpperCase()}
+          </ThemedText>
+        </View>
+        <ThemedText style={styles.teamOptionText} numberOfLines={1}>
+          {team.name}
         </ThemedText>
-      </View>
-      <ThemedText style={styles.teamOptionText} numberOfLines={1}>
-        {team.name}
-      </ThemedText>
-      <View style={[styles.radio, selected && styles.radioSelected]}>
-        {selected ? <View style={styles.radioDot} /> : null}
-      </View>
-    </Pressable>
+        <View style={[styles.radio, selected && styles.radioSelected]}>
+          {selected ? (
+            <Animated.View entering={ZoomIn.duration(160)} style={styles.radioDot} />
+          ) : null}
+        </View>
+      </AnimatedPressable>
+    </Animated.View>
   );
 }
 
@@ -947,16 +1011,19 @@ function TeamLineupEditor({
                 const selectedPlayer = lineup[slot.id];
 
                 return (
-                  <View key={slot.id}>
-                    <Pressable
+                  <Animated.View
+                    key={slot.id}
+                    entering={ZoomIn.delay((rowIndex * 3) * 30).duration(240)}
+                    layout={LinearTransition.duration(180)}>
+                    <AnimatedPressable
+                      scaleTo={0.92}
                       accessibilityRole="button"
                       disabled={!onSelectSlot}
                       accessibilityLabel={`${slot.label}: ${selectedPlayer ?? 'Unassigned'}`}
                       onPress={() => onSelectSlot?.(slot.id)}
-                      style={({ pressed }) => [
+                      style={[
                         styles.matchPitchPlayer,
                         selectedPlayer && styles.matchPitchPlayerSelected,
-                        pressed && styles.pressed,
                       ]}>
                       <ThemedText
                         style={[
@@ -976,8 +1043,8 @@ function TeamLineupEditor({
                         ]}>
                         {selectedPlayer ?? 'Add player'}
                       </ThemedText>
-                    </Pressable>
-                  </View>
+                    </AnimatedPressable>
+                  </Animated.View>
                 );
               })}
             </View>
@@ -1156,15 +1223,15 @@ function CalendarDatePicker({
           })}
         </View>
       ) : (
-        <Pressable
+        <AnimatedPressable
+          scaleTo={0.98}
           accessibilityRole="button"
           accessibilityLabel={displayDate ? `Match date: ${displayDate}` : 'Choose match date'}
           onPress={openDatePicker}
-          style={({ pressed }) => [
+          style={[
             styles.input,
             styles.datePickerTrigger,
             { borderColor: HAIRLINE, backgroundColor: 'rgba(128, 128, 128, 0.08)' },
-            pressed && styles.pressed,
           ]}>
           <ThemedText
             themeColor={displayDate ? undefined : 'textSecondary'}
@@ -1174,7 +1241,7 @@ function CalendarDatePicker({
           <ThemedText themeColor="textSecondary" style={styles.datePickerIcon}>
             ▦
           </ThemedText>
-        </Pressable>
+        </AnimatedPressable>
       )}
 
       {Platform.OS === 'ios' ? (
@@ -1190,7 +1257,10 @@ function CalendarDatePicker({
               onPress={() => setIsOpen(false)}
               style={styles.calendarBackdrop}
             />
-            <View style={[styles.calendarCard, { backgroundColor: colors.background }]}>
+            <Animated.View
+              entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
+              exiting={FadeOut.duration(140)}
+              style={[styles.calendarCard, { backgroundColor: colors.background }]}>
               <ThemedText type="subtitle" style={styles.calendarTitle}>
                 Choose match date
               </ThemedText>
@@ -1206,7 +1276,7 @@ function CalendarDatePicker({
                   }
                 }}
               />
-              <Pressable
+              <AnimatedPressable
                 accessibilityRole="button"
                 onPress={() => {
                   onChange(formatDateKey(pendingDate));
@@ -1214,8 +1284,8 @@ function CalendarDatePicker({
                 }}
                 style={styles.datePickerDone}>
                 <ThemedText style={styles.datePickerDoneText}>Done</ThemedText>
-              </Pressable>
-            </View>
+              </AnimatedPressable>
+            </Animated.View>
           </View>
         </Modal>
       ) : null}
@@ -1310,15 +1380,15 @@ function KickoffTimePicker({
           })}
         </View>
       ) : (
-        <Pressable
+        <AnimatedPressable
+          scaleTo={0.98}
           accessibilityRole="button"
           accessibilityLabel={displayTime ? `Kickoff time: ${displayTime}` : 'Choose kickoff time'}
           onPress={openTimePicker}
-          style={({ pressed }) => [
+          style={[
             styles.input,
             styles.datePickerTrigger,
             { borderColor: HAIRLINE, backgroundColor: 'rgba(128, 128, 128, 0.08)' },
-            pressed && styles.pressed,
           ]}>
           <ThemedText
             themeColor={displayTime ? undefined : 'textSecondary'}
@@ -1328,7 +1398,7 @@ function KickoffTimePicker({
           <ThemedText themeColor="textSecondary" style={styles.datePickerIcon}>
             ◷
           </ThemedText>
-        </Pressable>
+        </AnimatedPressable>
       )}
 
       {Platform.OS === 'ios' ? (
@@ -1344,7 +1414,10 @@ function KickoffTimePicker({
               onPress={() => setIsOpen(false)}
               style={styles.calendarBackdrop}
             />
-            <View style={[styles.calendarCard, { backgroundColor: colors.background }]}>
+            <Animated.View
+              entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
+              exiting={FadeOut.duration(140)}
+              style={[styles.calendarCard, { backgroundColor: colors.background }]}>
               <ThemedText type="subtitle" style={styles.calendarTitle}>
                 Choose kickoff time
               </ThemedText>
@@ -1355,7 +1428,7 @@ function KickoffTimePicker({
                 accentColor="#1f7a4d"
                 onValueChange={(_event, nextTime) => setPendingTime(nextTime)}
               />
-              <Pressable
+              <AnimatedPressable
                 accessibilityRole="button"
                 onPress={() => {
                   onChange(formatTimeKey(pendingTime));
@@ -1363,8 +1436,8 @@ function KickoffTimePicker({
                 }}
                 style={styles.datePickerDone}>
                 <ThemedText style={styles.datePickerDoneText}>Done</ThemedText>
-              </Pressable>
-            </View>
+              </AnimatedPressable>
+            </Animated.View>
           </View>
         </Modal>
       ) : null}
@@ -1427,7 +1500,6 @@ const styles = StyleSheet.create({
   },
   backIcon: { fontSize: 22, fontWeight: '600', lineHeight: 22 },
   backText: { fontWeight: '600' },
-  pressed: { opacity: 0.7 },
   title: { fontSize: 38, lineHeight: 46, fontWeight: '700' },
   subtitle: { marginTop: Spacing.one, fontSize: 16, lineHeight: 23 },
 
@@ -1443,7 +1515,6 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: HAIRLINE,
   },
-  stepDotActive: { backgroundColor: '#1f7a4d' },
   stepLine: { flex: 1, height: 2, backgroundColor: HAIRLINE, borderRadius: 1 },
   stepCaption: { marginTop: Spacing.two, fontSize: 14 },
 
@@ -1493,7 +1564,7 @@ const styles = StyleSheet.create({
     borderColor: HAIRLINE,
     backgroundColor: 'rgba(128, 128, 128, 0.05)',
   },
-  dropdownIndicator: { fontSize: 20, lineHeight: 24, paddingHorizontal: Spacing.one },
+  dropdownIndicator: { paddingHorizontal: Spacing.one },
   teamOption: {
     flexDirection: 'row',
     alignItems: 'center',
