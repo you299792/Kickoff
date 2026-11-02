@@ -33,6 +33,7 @@ import {
   migrateLineupToFormation,
   type FormationSlot,
 } from '@/constants/formations';
+import { DraggablePitch } from '@/components/draggable-pitch';
 import { useTheme } from '@/hooks/use-theme';
 
 const TEAM_COLOR_PALETTE = [
@@ -337,6 +338,28 @@ export default function CreateTeamScreen() {
     );
     setSelectedFormationId(formationId);
     setActivePitchSlot(null);
+  }
+
+  function handleSwapSlots(sourceSlotId: string, targetSlotId: string) {
+    setLineup((current) => {
+      const sourcePlayer = current[sourceSlotId];
+      const targetPlayer = current[targetSlotId];
+      const next = { ...current };
+
+      if (sourcePlayer !== undefined) {
+        next[targetSlotId] = sourcePlayer;
+      } else {
+        delete next[targetSlotId];
+      }
+
+      if (targetPlayer !== undefined) {
+        next[sourceSlotId] = targetPlayer;
+      } else {
+        delete next[sourceSlotId];
+      }
+
+      return next;
+    });
   }
 
   function assignPlayerToSlot(playerId: number | null) {
@@ -685,7 +708,7 @@ export default function CreateTeamScreen() {
                     </ThemedText>
                   </View>
                   <ThemedText themeColor="textSecondary" style={styles.lineupHint}>
-                    Choose a tactical formation and tap positions on the pitch to assign players.
+                    Tap a position to assign a player, or drag and drop between positions to swap them.
                   </ThemedText>
 
                   {/* Formation picker */}
@@ -725,67 +748,13 @@ export default function CreateTeamScreen() {
                     </ThemedText>
                   </View>
 
-                  <View style={styles.pitch}>
-                    <View style={styles.pitchOutline}>
-                      <View style={styles.pitchHalfLine} />
-                      <View style={styles.pitchCentreCircle} />
-                      <View style={styles.pitchTopBox}>
-                        <View style={styles.pitchTopGoal} />
-                      </View>
-                      <View style={styles.pitchBottomBox}>
-                        <View style={styles.pitchBottomGoal} />
-                      </View>
-                      <View style={styles.pitchPlayers}>
-                        {currentFormation.rows.map((row, rowIndex) => (
-                          <View key={row.label} style={styles.pitchRow}>
-                            {row.slots.map((slot, slotIndex) => {
-                              const assignedPlayer = players.find(
-                                (player) => player.id === lineup[slot.id],
-                              );
-                              return (
-                                <Animated.View
-                                  key={slot.id}
-                                  entering={ZoomIn.delay(
-                                    (rowIndex * 4 + slotIndex) * 35,
-                                  ).duration(240)}
-                                  layout={LinearTransition.duration(180)}>
-                                  <AnimatedPressable
-                                    scaleTo={0.92}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={
-                                      assignedPlayer
-                                        ? `${slot.label}, ${assignedPlayer.name || 'unnamed player'}`
-                                        : `Assign player to ${slot.label}`
-                                    }
-                                    onPress={() => setActivePitchSlot(slot)}
-                                    style={[
-                                      styles.pitchPlayer,
-                                      assignedPlayer && styles.pitchPlayerAssigned,
-                                    ]}>
-                                    <ThemedText
-                                      style={[
-                                        styles.pitchPlayerCode,
-                                        assignedPlayer && styles.pitchPlayerTextAssigned,
-                                      ]}>
-                                      {assignedPlayer ? assignedPlayer.number : slot.label}
-                                    </ThemedText>
-                                    <ThemedText
-                                      numberOfLines={1}
-                                      style={[
-                                        styles.pitchPlayerName,
-                                        assignedPlayer && styles.pitchPlayerTextAssigned,
-                                      ]}>
-                                      {assignedPlayer?.name || 'Add player'}
-                                    </ThemedText>
-                                  </AnimatedPressable>
-                                </Animated.View>
-                              );
-                            })}
-                          </View>
-                        ))}
-                      </View>
-                    </View>
-                  </View>
+                  <DraggablePitch
+                    formation={currentFormation}
+                    lineup={lineup}
+                    players={players}
+                    onSelectSlot={(slot) => setActivePitchSlot(slot)}
+                    onSwapSlots={handleSwapSlots}
+                  />
                   <ThemedText themeColor="textSecondary" style={styles.lineupCount}>
                     {Object.keys(lineup).length} of 11 positions filled
                   </ThemedText>
