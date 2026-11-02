@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   PanResponder,
   StyleSheet,
@@ -9,6 +9,10 @@ import {
 } from 'react-native';
 import Animated, {
   LinearTransition,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
   ZoomIn,
 } from 'react-native-reanimated';
 
@@ -53,6 +57,9 @@ export function DraggablePitch({
   const [hoveredSlotId, setHoveredSlotId] = useState<string | null>(null);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
 
+  // Subtle floating card reanimated shared value
+  const floatScale = useSharedValue(1);
+
   // Measure pitch bounding box relative to page or parent
   const pitchPageOffsetRef = useRef<{ pageX: number; pageY: number }>({ pageX: 0, pageY: 0 });
 
@@ -88,8 +95,7 @@ export function DraggablePitch({
     (relX: number, relY: number, excludeSlotId?: string): string | null => {
       let closestId: string | null = null;
       let minDistanceSq = Infinity;
-      // Generous snap radius in pixels
-      const MAX_SNAP_RADIUS = 78;
+      const MAX_SNAP_RADIUS = 84;
       const MAX_SNAP_RADIUS_SQ = MAX_SNAP_RADIUS * MAX_SNAP_RADIUS;
 
       for (const [slotId, layout] of slotLayoutsRef.current.entries()) {
@@ -116,6 +122,34 @@ export function DraggablePitch({
   const draggingPlayer = draggingAssignedPlayerId
     ? players.find((p) => p.id === draggingAssignedPlayerId)
     : null;
+
+  // Gentle float scale on pickup
+  useEffect(() => {
+    if (draggingSlotId) {
+      floatScale.value = withTiming(1.06, { duration: 140 });
+    } else {
+      floatScale.value = withTiming(1, { duration: 140 });
+    }
+  }, [draggingSlotId, floatScale]);
+
+  const floatingAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: floatScale.value }],
+    };
+  });
+
+  const handleDragEndInternal = useCallback(
+    (sourceSlotId: string, targetSlotId: string | null) => {
+      setDraggingSlotId(null);
+      setHoveredSlotId(null);
+      setDragPosition(null);
+
+      if (targetSlotId && targetSlotId !== sourceSlotId) {
+        onSwapSlots(sourceSlotId, targetSlotId);
+      }
+    },
+    [onSwapSlots],
+  );
 
   return (
     <View
@@ -164,14 +198,7 @@ export function DraggablePitch({
                       setDragPosition(pos);
                       setHoveredSlotId(targetSlotId);
                     }}
-                    onDragEnd={(sourceSlotId, targetSlotId) => {
-                      setDraggingSlotId(null);
-                      setHoveredSlotId(null);
-                      setDragPosition(null);
-                      if (targetSlotId && targetSlotId !== sourceSlotId) {
-                        onSwapSlots(sourceSlotId, targetSlotId);
-                      }
-                    }}
+                    onDragEnd={handleDragEndInternal}
                     onPress={() => onSelectSlot(slot)}
                   />
                 );
@@ -182,22 +209,33 @@ export function DraggablePitch({
 
         {/* Floating preview of the dragged player */}
         {isDraggingActive(draggingSlotId, dragPosition) && draggingSlot && (
-          <View
+          <Animated.View
             pointerEvents="none"
             style={[
               styles.draggedFloatingBadge,
+              hoveredSlotId ? styles.draggedFloatingBadgeHovered : null,
               {
-                left: dragPosition!.x - 36,
-                top: dragPosition!.y - 30,
+                left: dragPosition!.x - 34,
+                top: dragPosition!.y - 29,
               },
+              floatingAnimatedStyle,
             ]}>
-            <ThemedText style={styles.draggedFloatingNumber}>
+            <ThemedText
+              style={[
+                styles.draggedFloatingNumber,
+                hoveredSlotId ? styles.draggedFloatingNumberHovered : null,
+              ]}>
               {draggingPlayer ? draggingPlayer.number : draggingSlot.label}
             </ThemedText>
-            <ThemedText numberOfLines={1} style={styles.draggedFloatingName}>
+            <ThemedText
+              numberOfLines={1}
+              style={[
+                styles.draggedFloatingName,
+                hoveredSlotId ? styles.draggedFloatingNameHovered : null,
+              ]}>
               {draggingPlayer?.name || 'Empty'}
             </ThemedText>
-          </View>
+          </Animated.View>
         )}
       </View>
     </View>
@@ -248,6 +286,30 @@ function SlotItem({
   const slotViewRef = useRef<ViewInstance | null>(null);
   const dragActiveRef = useRef(false);
   const hoveredSlotRef = useRef<string | null>(null);
+
+  // Smooth, subtle transition for hover and drag states
+  const slotScale = useSharedValue(1);
+  const slotOpacity = useSharedValue(1);
+
+  useEffect(() => {
+    if (isDragging) {
+      slotOpacity.value = withTiming(0.4, { duration: 160 });
+      slotScale.value = withTiming(0.95, { duration: 160 });
+    } else if (isHovered) {
+      slotOpacity.value = withTiming(1, { duration: 140 });
+      slotScale.value = withTiming(1.05, { duration: 140 });
+    } else {
+      slotOpacity.value = withTiming(1, { duration: 200 });
+      slotScale.value = withTiming(1, { duration: 200 });
+    }
+  }, [isDragging, isHovered, slotOpacity, slotScale]);
+
+  const animatedSlotStyle = useAnimatedStyle(() => {
+    return {
+      opacity: slotOpacity.value,
+      transform: [{ scale: slotScale.value }],
+    };
+  });
 
   const measureSlotPosition = useCallback(() => {
     slotViewRef.current?.measure(
@@ -308,7 +370,6 @@ function SlotItem({
         }
 
         if (dragActiveRef.current) {
-          // Use radius-based closest slot matching with generous hitbox
           const targetSlotId = findClosestSlot(relX, relY, slot.id);
           hoveredSlotRef.current = targetSlotId;
           onDragMove({ x: relX, y: relY }, targetSlotId);
@@ -335,8 +396,9 @@ function SlotItem({
   return (
     <Animated.View
       entering={ZoomIn.delay(slotIndex * 30).duration(200)}
-      layout={LinearTransition.duration(180)}
-      onLayout={measureSlotPosition}>
+      layout={LinearTransition.springify().damping(18).stiffness(140)}
+      onLayout={measureSlotPosition}
+      style={animatedSlotStyle}>
       <View
         ref={slotViewRef}
         {...panResponder.panHandlers}
@@ -466,20 +528,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
     borderRadius: Spacing.two,
     backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: 'transparent',
   },
   pitchPlayerAssigned: {
     backgroundColor: '#ffffff',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 2,
   },
   pitchPlayerDragging: {
-    opacity: 0.35,
-    transform: [{ scale: 0.9 }],
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   pitchPlayerHovered: {
     borderColor: '#f59e0b',
-    backgroundColor: 'rgba(245, 158, 11, 0.35)',
-    transform: [{ scale: 1.1 }],
+    backgroundColor: '#fffbeb',
   },
   pitchPlayerCode: {
     color: '#ffffff',
@@ -487,7 +554,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   pitchPlayerCodeHovered: {
-    color: '#ffffff',
+    color: '#92400e',
   },
   pitchPlayerName: {
     maxWidth: 62,
@@ -496,7 +563,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   pitchPlayerNameHovered: {
-    color: '#ffffff',
+    color: '#92400e',
     fontWeight: '700',
   },
   pitchPlayerTextAssigned: {
@@ -506,46 +573,51 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -9,
     backgroundColor: '#f59e0b',
-    paddingHorizontal: 7,
-    paddingVertical: 1.5,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
     borderRadius: 8,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 4,
   },
   hoverIndicatorText: {
     color: '#111827',
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: '800',
   },
   draggedFloatingBadge: {
     position: 'absolute',
-    width: 72,
-    minHeight: 60,
+    width: 68,
+    minHeight: 58,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: Spacing.two,
     backgroundColor: '#ffffff',
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#1f7a4d',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.38,
-    shadowRadius: 8,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 6,
+    elevation: 8,
     zIndex: 9999,
+  },
+  draggedFloatingBadgeHovered: {
+    borderColor: '#f59e0b',
+    backgroundColor: '#fffbeb',
   },
   draggedFloatingNumber: {
     color: '#145c3a',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
   },
+  draggedFloatingNumberHovered: {
+    color: '#92400e',
+  },
   draggedFloatingName: {
-    maxWidth: 66,
+    maxWidth: 62,
     color: '#145c3a',
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  draggedFloatingNameHovered: {
+    color: '#92400e',
   },
 });
