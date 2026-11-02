@@ -26,6 +26,13 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { getCreatedTeams, saveCreatedTeam, updateCreatedTeam } from '@/data/teams';
+import {
+  DEFAULT_FORMATION_ID,
+  FORMATIONS,
+  getFormationById,
+  migrateLineupToFormation,
+  type FormationSlot,
+} from '@/constants/formations';
 import { useTheme } from '@/hooks/use-theme';
 
 const TEAM_COLOR_PALETTE = [
@@ -44,36 +51,7 @@ const STARTING_POSITIONS = [
 
 type StartingPosition = (typeof STARTING_POSITIONS)[number]['code'];
 type PlayerDraft = { id: number; name: string; number: number; position: StartingPosition };
-type PitchSlot = { id: string; label: string };
-
-const PITCH_ROWS: { label: string; slots: PitchSlot[] }[] = [
-  {
-    label: 'Forwards',
-    slots: [
-      { id: 'left-forward', label: 'LW' },
-      { id: 'centre-forward', label: 'ST' },
-      { id: 'right-forward', label: 'RW' },
-    ],
-  },
-  {
-    label: 'Midfielders',
-    slots: [
-      { id: 'left-midfield', label: 'LM' },
-      { id: 'centre-midfield', label: 'CM' },
-      { id: 'right-midfield', label: 'RM' },
-    ],
-  },
-  {
-    label: 'Defenders',
-    slots: [
-      { id: 'left-back', label: 'LB' },
-      { id: 'left-centre-back', label: 'CB' },
-      { id: 'right-centre-back', label: 'CB' },
-      { id: 'right-back', label: 'RB' },
-    ],
-  },
-  { label: 'Goalkeeper', slots: [{ id: 'goalkeeper', label: 'GK' }] },
-];
+type PitchSlot = FormationSlot;
 
 export default function CreateTeamScreen() {
   const router = useRouter();
@@ -99,6 +77,7 @@ export default function CreateTeamScreen() {
   const [editPlayerPosition, setEditPlayerPosition] = useState<StartingPosition | null>(null);
   const [editPlayerFormError, setEditPlayerFormError] = useState('');
   const [showLineup, setShowLineup] = useState(false);
+  const [selectedFormationId, setSelectedFormationId] = useState(DEFAULT_FORMATION_ID);
   const [lineup, setLineup] = useState<Record<string, number>>({});
   const [activePitchSlot, setActivePitchSlot] = useState<PitchSlot | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -181,6 +160,7 @@ export default function CreateTeamScreen() {
     setEditPlayerPosition(null);
     setEditPlayerFormError('');
     setShowLineup(false);
+    setSelectedFormationId(DEFAULT_FORMATION_ID);
     setLineup({});
     setActivePitchSlot(null);
     setSaveError(null);
@@ -345,6 +325,18 @@ export default function CreateTeamScreen() {
     );
     if (captainId === id) setCaptainId(null);
     if (editingPlayerId === id) cancelEditPlayer();
+  }
+
+  const currentFormation = getFormationById(selectedFormationId);
+
+  function handleSelectFormation(formationId: string) {
+    if (formationId === selectedFormationId) return;
+    const targetFormation = getFormationById(formationId);
+    setLineup((current) =>
+      migrateLineupToFormation(current, players, targetFormation, currentFormation),
+    );
+    setSelectedFormationId(formationId);
+    setActivePitchSlot(null);
   }
 
   function assignPlayerToSlot(playerId: number | null) {
@@ -689,12 +681,50 @@ export default function CreateTeamScreen() {
                   <View style={styles.lineupHeader}>
                     <ThemedText style={styles.lineupTitle}>Starting lineup</ThemedText>
                     <ThemedText themeColor="textSecondary" style={styles.lineupFormation}>
-                      4-3-3
+                      {currentFormation.name}
                     </ThemedText>
                   </View>
                   <ThemedText themeColor="textSecondary" style={styles.lineupHint}>
-                    Tap a position on the pitch to assign a player.
+                    Choose a tactical formation and tap positions on the pitch to assign players.
                   </ThemedText>
+
+                  {/* Formation picker */}
+                  <View style={styles.formationPickerContainer}>
+                    <ThemedText style={styles.formationSectionLabel}>Select formation</ThemedText>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.formationChipsList}>
+                      {FORMATIONS.map((fmt) => {
+                        const isSelected = fmt.id === selectedFormationId;
+                        return (
+                          <AnimatedPressable
+                            key={fmt.id}
+                            scaleTo={0.94}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: isSelected }}
+                            accessibilityLabel={`Formation ${fmt.name}`}
+                            onPress={() => handleSelectFormation(fmt.id)}
+                            style={[
+                              styles.formationChip,
+                              isSelected && styles.formationChipSelected,
+                            ]}>
+                            <ThemedText
+                              style={[
+                                styles.formationChipText,
+                                isSelected && styles.formationChipTextSelected,
+                              ]}>
+                              {fmt.name}
+                            </ThemedText>
+                          </AnimatedPressable>
+                        );
+                      })}
+                    </ScrollView>
+                    <ThemedText type="small" themeColor="textSecondary" style={styles.formationDescription}>
+                      {currentFormation.description}
+                    </ThemedText>
+                  </View>
+
                   <View style={styles.pitch}>
                     <View style={styles.pitchOutline}>
                       <View style={styles.pitchHalfLine} />
@@ -706,7 +736,7 @@ export default function CreateTeamScreen() {
                         <View style={styles.pitchBottomGoal} />
                       </View>
                       <View style={styles.pitchPlayers}>
-                        {PITCH_ROWS.map((row, rowIndex) => (
+                        {currentFormation.rows.map((row, rowIndex) => (
                           <View key={row.label} style={styles.pitchRow}>
                             {row.slots.map((slot, slotIndex) => {
                               const assignedPlayer = players.find(
@@ -1444,6 +1474,48 @@ const styles = StyleSheet.create({
   lineupTitle: { fontSize: 17, fontWeight: '700' },
   lineupFormation: { fontSize: 13, fontWeight: '700' },
   lineupHint: { fontSize: 13, lineHeight: 19 },
+  formationPickerContainer: {
+    gap: Spacing.one,
+    paddingVertical: Spacing.one,
+  },
+  formationSectionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    color: '#8f98a3',
+  },
+  formationChipsList: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    paddingVertical: Spacing.one,
+  },
+  formationChip: {
+    minHeight: 38,
+    paddingHorizontal: Spacing.three,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.35)',
+    backgroundColor: 'rgba(128, 128, 128, 0.08)',
+  },
+  formationChipSelected: {
+    backgroundColor: '#1f7a4d',
+    borderColor: '#1f7a4d',
+  },
+  formationChipText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  formationChipTextSelected: {
+    color: '#ffffff',
+  },
+  formationDescription: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    paddingHorizontal: 2,
+  },
   pitch: { padding: Spacing.two, borderRadius: Spacing.three, backgroundColor: '#176b45' },
   pitchOutline: {
     aspectRatio: 0.72,
