@@ -11,7 +11,6 @@ import Animated, {
   LinearTransition,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
   ZoomIn,
 } from 'react-native-reanimated';
@@ -21,7 +20,7 @@ import { Spacing } from '@/constants/theme';
 import type { Formation, FormationSlot } from '@/constants/formations';
 
 export type PitchPlayerInfo = {
-  id: number;
+  id?: number | string;
   name: string;
   number: number;
 };
@@ -36,7 +35,7 @@ type SlotLayout = {
 
 type DraggablePitchProps = {
   formation: Formation;
-  lineup: Record<string, number>;
+  lineup: Record<string, number | string>;
   players: PitchPlayerInfo[];
   onSelectSlot: (slot: FormationSlot) => void;
   onSwapSlots: (sourceSlotId: string, targetSlotId: string) => void;
@@ -118,9 +117,9 @@ export function DraggablePitch({
   const draggingSlot = draggingSlotId
     ? formation.rows.flatMap((r) => r.slots).find((s) => s.id === draggingSlotId)
     : null;
-  const draggingAssignedPlayerId = draggingSlotId ? lineup[draggingSlotId] : undefined;
-  const draggingPlayer = draggingAssignedPlayerId
-    ? players.find((p) => p.id === draggingAssignedPlayerId)
+  const draggingAssignedVal = draggingSlotId ? lineup[draggingSlotId] : undefined;
+  const draggingPlayer = draggingAssignedVal !== undefined
+    ? players.find((p) => p.id === draggingAssignedVal || p.name === draggingAssignedVal)
     : null;
 
   // Gentle float scale on pickup
@@ -170,9 +169,9 @@ export function DraggablePitch({
           {formation.rows.map((row) => (
             <View key={row.label} style={styles.pitchRow}>
               {row.slots.map((slot, slotIndex) => {
-                const assignedPlayerId = lineup[slot.id];
-                const assignedPlayer = assignedPlayerId
-                  ? players.find((p) => p.id === assignedPlayerId)
+                const assignedVal = lineup[slot.id];
+                const assignedPlayer = assignedVal !== undefined
+                  ? players.find((p) => p.id === assignedVal || p.name === assignedVal)
                   : undefined;
                 const isDragging = draggingSlotId === slot.id;
                 const isHovered = hoveredSlotId === slot.id && !isDragging;

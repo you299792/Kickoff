@@ -38,6 +38,15 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { createMatchId, getCurrentTimestamp, saveMatchFixture, type MatchFixture } from '@/data/matches';
+import {
+  DEFAULT_FORMATION_ID,
+  FORMATIONS,
+  getFormationById,
+  migrateMatchLineupToFormation,
+  type Formation,
+  type FormationSlot,
+} from '@/constants/formations';
+import { DraggablePitch } from '@/components/draggable-pitch';
 import { getCreatedTeams, type CreatedTeam } from '@/data/teams';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -87,6 +96,7 @@ export default function NewMatchScreen() {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
   const [stepDirection, setStepDirection] = useState<'forward' | 'backward'>('forward');
   const [matchLineups, setMatchLineups] = useState<MatchLineups>({});
+  const [matchFormations, setMatchFormations] = useState<Record<string, string>>({});
   const [openLineupSlot, setOpenLineupSlot] = useState<string | null>(null);
   const [competition, setCompetition] = useState(DEFAULT_COMPETITION);
   const [location, setLocation] = useState('');
@@ -118,6 +128,7 @@ export default function NewMatchScreen() {
     setStepDirection('forward');
     setCurrentStep(1);
     setMatchLineups({});
+    setMatchFormations({});
     setOpenLineupSlot(null);
     setCompetition(DEFAULT_COMPETITION);
     setLocation('');
@@ -196,7 +207,9 @@ export default function NewMatchScreen() {
   const lineupPickerSlotId = lineupPickerTeam
     ? openLineupSlot?.slice(lineupPickerTeam.id.length + 1)
     : undefined;
-  const lineupPickerSlot = MATCH_LINEUP_SLOTS.find((slot) => slot.id === lineupPickerSlotId);
+  const lineupPickerFormationId = lineupPickerTeam ? matchFormations[lineupPickerTeam.id] ?? DEFAULT_FORMATION_ID : DEFAULT_FORMATION_ID;
+  const lineupPickerFormation = getFormationById(lineupPickerFormationId);
+  const lineupPickerSlot = lineupPickerFormation.rows.flatMap((r) => r.slots).find((slot) => slot.id === lineupPickerSlotId);
   const lineupPicker =
     lineupPickerTeam && lineupPickerSlot
       ? {
@@ -229,6 +242,61 @@ export default function NewMatchScreen() {
     setOpenTeamDropdown(null);
     if (id === selectedTeamId) setSelectedTeamId('');
     setError('');
+  }
+
+  function handleSelectMatchFormation(teamId: string, newFormationId: string) {
+    const team = [selectedTeam, selectedOpponent].find((t) => t?.id === teamId);
+    if (!team) return;
+
+    const currentFmtId = matchFormations[teamId] ?? DEFAULT_FORMATION_ID;
+    if (newFormationId === currentFmtId) return;
+
+    const targetFormation = getFormationById(newFormationId);
+    const currentTeamLineup = matchLineups[teamId] ?? team.lineup;
+
+    const adjustedLineup = migrateMatchLineupToFormation(
+      currentTeamLineup,
+      team.roster,
+      targetFormation,
+    );
+
+    setMatchFormations((current) => ({
+      ...current,
+      [teamId]: newFormationId,
+    }));
+
+    setMatchLineups((current) => ({
+      ...current,
+      [teamId]: adjustedLineup,
+    }));
+
+    setOpenLineupSlot(null);
+  }
+
+  function handleSwapMatchSlots(teamId: string, sourceSlotId: string, targetSlotId: string) {
+    setMatchLineups((current) => {
+      const teamLineup = current[teamId] ?? {};
+      const sourcePlayer = teamLineup[sourceSlotId];
+      const targetPlayer = teamLineup[targetSlotId];
+      const nextLineup = { ...teamLineup };
+
+      if (sourcePlayer !== undefined) {
+        nextLineup[targetSlotId] = sourcePlayer;
+      } else {
+        delete nextLineup[targetSlotId];
+      }
+
+      if (targetPlayer !== undefined) {
+        nextLineup[sourceSlotId] = targetPlayer;
+      } else {
+        delete nextLineup[sourceSlotId];
+      }
+
+      return {
+        ...current,
+        [teamId]: nextLineup,
+      };
+    });
   }
 
   function updateMatchLineup(team: Team, slotId: string, playerName: string) {
@@ -616,15 +684,24 @@ export default function NewMatchScreen() {
                 <ThemedText type="small" themeColor="textSecondary" style={styles.matchOnlyNotice}>
                   Changes here apply to this match only. Your saved team lineups will not be changed.
                 </ThemedText>
-                {[selectedTeam, selectedOpponent].map((team, teamIndex) => (
-                  <Animated.View key={team.id} entering={FadeInUp.delay(teamIndex * 80).duration(300)}>
-                    <TeamLineupEditor
-                      team={team}
-                      lineup={matchLineups[team.id] ?? team.lineup}
-                      onSelectSlot={(slotId) => setOpenLineupSlot(`${team.id}:${slotId}`)}
-                    />
-                  </Animated.View>
-                ))}
+                {[selectedTeam, selectedOpponent].map((team, teamIndex) => {
+                  const formationId = matchFormations[team.id] ?? DEFAULT_FORMATION_ID;
+                  const formation = getFormationById(formationId);
+                  const teamLineup = matchLineups[team.id] ?? team.lineup;
+
+                  return (
+                    <Animated.View key={team.id} entering={FadeInUp.delay(teamIndex * 80).duration(300)}>
+                      <TeamLineupEditor
+                        team={team}
+                        formation={formation}
+                        lineup={teamLineup}
+                        onSelectFormation={(fmtId) => handleSelectMatchFormation(team.id, fmtId)}
+                        onSelectSlot={(slotId) => setOpenLineupSlot(`${team.id}:${slotId}`)}
+                        onSwapSlots={(source, target) => handleSwapMatchSlots(team.id, source, target)}
+                      />
+                    </Animated.View>
+                  );
+                })}
                 <AnimatedPressable
                   accessibilityRole="button"
                   accessibilityLabel="Continue to match review"
@@ -1031,14 +1108,20 @@ function TeamOption({ team, selected, onPress, index = 0 }: TeamOptionProps & { 
 
 type TeamLineupEditorProps = {
   team: Team;
+  formation: Formation;
   lineup: Record<string, string>;
+  onSelectFormation: (formationId: string) => void;
   onSelectSlot?: (slotId: string) => void;
+  onSwapSlots: (sourceSlotId: string, targetSlotId: string) => void;
 };
 
 function TeamLineupEditor({
   team,
+  formation,
   lineup,
+  onSelectFormation,
   onSelectSlot,
+  onSwapSlots,
 }: TeamLineupEditorProps) {
   return (
     <ThemedView type="backgroundElement" style={styles.lineupCard}>
@@ -1053,63 +1136,55 @@ function TeamLineupEditor({
             {team.name}
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            Starting lineup · {Object.keys(lineup).length}/11 selected
+            Starting lineup · {formation.name} · {Object.keys(lineup).length}/11 selected
           </ThemedText>
         </View>
       </View>
 
-      <View style={styles.matchPitch}>
-        <View style={styles.matchPitchHalfLine} />
-        <View style={styles.matchPitchCentreCircle} />
-        <View style={styles.matchPitchTopBox} />
-        <View style={styles.matchPitchBottomBox} />
-        <View style={styles.matchPitchRows}>
-          {MATCH_LINEUP_ROWS.map((row, rowIndex) => (
-            <View key={rowIndex} style={styles.matchPitchRow}>
-              {row.map((slot) => {
-                const selectedPlayer = lineup[slot.id];
-
-                return (
-                  <Animated.View
-                    key={slot.id}
-                    entering={ZoomIn.delay((rowIndex * 3) * 30).duration(240)}
-                    layout={LinearTransition.duration(180)}>
-                    <AnimatedPressable
-                      scaleTo={0.92}
-                      accessibilityRole="button"
-                      disabled={!onSelectSlot}
-                      accessibilityLabel={`${slot.label}: ${selectedPlayer ?? 'Unassigned'}`}
-                      onPress={() => onSelectSlot?.(slot.id)}
-                      style={[
-                        styles.matchPitchPlayer,
-                        selectedPlayer && styles.matchPitchPlayerSelected,
-                      ]}>
-                      <ThemedText
-                        style={[
-                          styles.matchPitchPlayerNumber,
-                          selectedPlayer && styles.matchPitchPlayerSelectedText,
-                        ]}>
-                        {selectedPlayer
-                          ? team.roster.find((player) => player.name === selectedPlayer)?.number ??
-                            '✓'
-                          : slot.label}
-                      </ThemedText>
-                      <ThemedText
-                        numberOfLines={1}
-                        style={[
-                          styles.matchPitchPlayerName,
-                          selectedPlayer && styles.matchPitchPlayerSelectedText,
-                        ]}>
-                        {selectedPlayer ?? 'Add player'}
-                      </ThemedText>
-                    </AnimatedPressable>
-                  </Animated.View>
-                );
-              })}
-            </View>
-          ))}
-        </View>
+      {/* Formation selection chips */}
+      <View style={styles.matchFormationContainer}>
+        <ThemedText style={styles.matchFormationLabel}>Match formation</ThemedText>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.matchFormationChips}>
+          {FORMATIONS.map((fmt) => {
+            const isSelected = fmt.id === formation.id;
+            return (
+              <AnimatedPressable
+                key={fmt.id}
+                scaleTo={0.94}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={`Formation ${fmt.name}`}
+                onPress={() => onSelectFormation(fmt.id)}
+                style={[
+                  styles.matchFormationChip,
+                  isSelected && styles.matchFormationChipSelected,
+                ]}>
+                <ThemedText
+                  style={[
+                    styles.matchFormationChipText,
+                    isSelected && styles.matchFormationChipTextSelected,
+                  ]}>
+                  {fmt.name}
+                </ThemedText>
+              </AnimatedPressable>
+            );
+          })}
+        </ScrollView>
+        <ThemedText type="small" themeColor="textSecondary" style={styles.matchFormationDesc}>
+          {formation.description}
+        </ThemedText>
       </View>
+
+      <DraggablePitch
+        formation={formation}
+        lineup={lineup}
+        players={team.roster}
+        onSelectSlot={(slot) => onSelectSlot?.(slot.id)}
+        onSwapSlots={onSwapSlots}
+      />
     </ThemedView>
   );
 }
@@ -1798,6 +1873,49 @@ const styles = StyleSheet.create({
   matchReviewLineupAction: {
     marginTop: 0,
     marginBottom: 0,
+  },
+  matchFormationContainer: {
+    gap: Spacing.one,
+    paddingVertical: Spacing.one,
+    marginBottom: Spacing.one,
+  },
+  matchFormationLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    color: '#8f98a3',
+  },
+  matchFormationChips: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    paddingVertical: Spacing.one,
+  },
+  matchFormationChip: {
+    minHeight: 36,
+    paddingHorizontal: Spacing.two + 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.35)',
+    backgroundColor: 'rgba(128, 128, 128, 0.08)',
+  },
+  matchFormationChipSelected: {
+    backgroundColor: '#1f7a4d',
+    borderColor: '#1f7a4d',
+  },
+  matchFormationChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  matchFormationChipTextSelected: {
+    color: '#ffffff',
+  },
+  matchFormationDesc: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    paddingHorizontal: 2,
   },
   lineupCard: {
     marginBottom: Spacing.three,

@@ -268,15 +268,12 @@ export function migrateLineupToFormation<TPlayer extends { id: number; position:
   }
 
   const assignedPlayerSet = new Set(currentAssignedPlayerIds);
-  const assignedPlayers = allPlayers.filter((p) => assignedPlayerSet.has(p.id));
 
-  // If there are players in lineup that might not be in allPlayers, ensure we don't lose them
   const playerMap = new Map<number, TPlayer>();
   for (const p of allPlayers) {
     playerMap.set(p.id, p);
   }
 
-  // Get target slots by category
   const targetSlots = getAllFormationSlots(targetFormation);
   const targetSlotsByCategory: Record<FormationCategory, FormationSlot[]> = {
     GK: targetSlots.filter((s) => s.category === 'GK'),
@@ -322,9 +319,77 @@ export function migrateLineupToFormation<TPlayer extends { id: number; position:
   const remainingEmptySlots = targetSlots.filter((s) => !nextLineup[s.id]);
   for (const emptySlot of remainingEmptySlots) {
     if (remainingPlayerIds.length === 0) break;
-    // Pick the next remaining player
     const playerId = remainingPlayerIds.shift()!;
     nextLineup[emptySlot.id] = playerId;
+  }
+
+  return nextLineup;
+}
+
+/**
+ * Migration helper for match lineups where lineup is Record<string, string> (slotId -> playerName)
+ */
+export function migrateMatchLineupToFormation<TPlayer extends { name: string; position: FormationCategory }>(
+  currentLineup: Record<string, string>,
+  allPlayers: TPlayer[],
+  targetFormation: Formation,
+): Record<string, string> {
+  const currentAssignedNames = Object.values(currentLineup).filter((n) => Boolean(n?.trim()));
+  if (currentAssignedNames.length === 0) {
+    return {};
+  }
+
+  const playerMap = new Map<string, TPlayer>();
+  for (const p of allPlayers) {
+    playerMap.set(p.name, p);
+  }
+
+  const targetSlots = getAllFormationSlots(targetFormation);
+  const targetSlotsByCategory: Record<FormationCategory, FormationSlot[]> = {
+    GK: targetSlots.filter((s) => s.category === 'GK'),
+    DF: targetSlots.filter((s) => s.category === 'DF'),
+    MF: targetSlots.filter((s) => s.category === 'MF'),
+    FW: targetSlots.filter((s) => s.category === 'FW'),
+  };
+
+  const nextLineup: Record<string, string> = {};
+  const remainingNames: string[] = [...currentAssignedNames];
+
+  // 1. Direct slot match if same slot id and category exists in target
+  for (const [slotId, playerName] of Object.entries(currentLineup)) {
+    const slot = targetSlots.find((s) => s.id === slotId);
+    const player = playerMap.get(playerName);
+    if (slot && player && player.position === slot.category && !nextLineup[slot.id]) {
+      nextLineup[slot.id] = playerName;
+      const idx = remainingNames.indexOf(playerName);
+      if (idx !== -1) remainingNames.splice(idx, 1);
+    }
+  }
+
+  // 2. Assign remaining players to unfilled slots of their matching position category
+  const categories: FormationCategory[] = ['GK', 'DF', 'MF', 'FW'];
+  for (const category of categories) {
+    const availableSlots = targetSlotsByCategory[category].filter((s) => !nextLineup[s.id]);
+    const matchingNames = remainingNames.filter((name) => {
+      const p = playerMap.get(name);
+      return p && p.position === category;
+    });
+
+    for (let i = 0; i < Math.min(availableSlots.length, matchingNames.length); i++) {
+      const slot = availableSlots[i];
+      const name = matchingNames[i];
+      nextLineup[slot.id] = name;
+      const remIdx = remainingNames.indexOf(name);
+      if (remIdx !== -1) remainingNames.splice(remIdx, 1);
+    }
+  }
+
+  // 3. Any remaining players into nearest available empty slots
+  const remainingEmptySlots = targetSlots.filter((s) => !nextLineup[s.id]);
+  for (const emptySlot of remainingEmptySlots) {
+    if (remainingNames.length === 0) break;
+    const name = remainingNames.shift()!;
+    nextLineup[emptySlot.id] = name;
   }
 
   return nextLineup;
