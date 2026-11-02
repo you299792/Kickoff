@@ -330,10 +330,13 @@ export default function NewMatchScreen() {
 
     try {
       await saveMatchFixture(match);
-      resetForm();
       if (status === 'in-progress') {
         router.push({ pathname: '/live-match', params: { matchId } });
+        setTimeout(() => {
+          resetForm();
+        }, 500);
       } else {
+        resetForm();
         router.replace('/');
       }
     } catch (saveError) {
