@@ -274,11 +274,8 @@ export default function NewMatchScreen() {
   }
 
   function handleSwapMatchSlots(teamId: string, sourceSlotId: string, targetSlotId: string) {
-    const team = [selectedTeam, selectedOpponent].find((candidate) => candidate?.id === teamId);
-    if (!team) return;
-
     setMatchLineups((current) => {
-      const teamLineup = current[teamId] ?? team.lineup;
+      const teamLineup = current[teamId] ?? {};
       const sourcePlayer = teamLineup[sourceSlotId];
       const targetPlayer = teamLineup[targetSlotId];
       const nextLineup = { ...teamLineup };

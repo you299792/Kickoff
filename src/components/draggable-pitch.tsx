@@ -62,20 +62,6 @@ export function DraggablePitch({
   // Measure pitch bounding box relative to page or parent
   const pitchPageOffsetRef = useRef<{ pageX: number; pageY: number }>({ pageX: 0, pageY: 0 });
 
-  const updatePitchPageOffset = useCallback((pageX: number, pageY: number) => {
-    const previousOffset = pitchPageOffsetRef.current;
-    const offsetDeltaX = previousOffset.pageX - pageX;
-    const offsetDeltaY = previousOffset.pageY - pageY;
-
-    // Keep cached slot centers aligned when the pitch moves inside the scrolling screen.
-    for (const layout of slotLayoutsRef.current.values()) {
-      layout.centerX += offsetDeltaX;
-      layout.centerY += offsetDeltaY;
-    }
-
-    pitchPageOffsetRef.current = { pageX, pageY };
-  }, []);
-
   const recordPitchLayout = useCallback(() => {
     pitchContainerRef.current?.measure(
       (
@@ -87,11 +73,11 @@ export function DraggablePitch({
         pageY: number,
       ) => {
         if (pageX !== undefined && pageY !== undefined) {
-          updatePitchPageOffset(pageX, pageY);
+          pitchPageOffsetRef.current = { pageX, pageY };
         }
       },
     );
-  }, [updatePitchPageOffset]);
+  }, []);
 
   const handleSlotMeasured = useCallback(
     (slot: FormationSlot, centerX: number, centerY: number, width: number, height: number) => {
@@ -100,25 +86,24 @@ export function DraggablePitch({
     [],
   );
 
-  const getSlotCenter = useCallback((slotId: string) => {
-    const layout = slotLayoutsRef.current.get(slotId);
-    return layout ? { x: layout.centerX, y: layout.centerY } : null;
-  }, []);
-
-  const findSlotAtPosition = useCallback(
+  /**
+   * Find closest slot to (relX, relY) on the pitch within an expansive radius.
+   * Excludes sourceSlotId if provided.
+   */
+  const findClosestSlot = useCallback(
     (relX: number, relY: number, excludeSlotId?: string): string | null => {
       let closestId: string | null = null;
       let minDistanceSq = Infinity;
+      const MAX_SNAP_RADIUS = 84;
+      const MAX_SNAP_RADIUS_SQ = MAX_SNAP_RADIUS * MAX_SNAP_RADIUS;
 
       for (const [slotId, layout] of slotLayoutsRef.current.entries()) {
         if (excludeSlotId && slotId === excludeSlotId) continue;
         const dx = relX - layout.centerX;
         const dy = relY - layout.centerY;
         const distSq = dx * dx + dy * dy;
-        const isOverSlot =
-          Math.abs(dx) <= layout.width / 2 && Math.abs(dy) <= layout.height / 2;
 
-        if (isOverSlot && distSq < minDistanceSq) {
+        if (distSq <= MAX_SNAP_RADIUS_SQ && distSq < minDistanceSq) {
           minDistanceSq = distSq;
           closestId = slotId;
         }
@@ -202,9 +187,7 @@ export function DraggablePitch({
                     onMeasured={handleSlotMeasured}
                     pitchContainerRef={pitchContainerRef}
                     pitchPageOffsetRef={pitchPageOffsetRef}
-                    updatePitchPageOffset={updatePitchPageOffset}
-                    getSlotCenter={getSlotCenter}
-                    findSlotAtPosition={findSlotAtPosition}
+                    findClosestSlot={findClosestSlot}
                     onDragStart={(sId, initPos) => {
                       setDraggingSlotId(sId);
                       setDragPosition(initPos);
@@ -277,9 +260,7 @@ type SlotItemProps = {
   ) => void;
   pitchContainerRef: React.RefObject<ViewInstance | null>;
   pitchPageOffsetRef: React.MutableRefObject<{ pageX: number; pageY: number }>;
-  updatePitchPageOffset: (pageX: number, pageY: number) => void;
-  getSlotCenter: (slotId: string) => { x: number; y: number } | null;
-  findSlotAtPosition: (relX: number, relY: number, excludeSlotId?: string) => string | null;
+  findClosestSlot: (relX: number, relY: number, excludeSlotId?: string) => string | null;
   onDragStart: (slotId: string, initPos: { x: number; y: number }) => void;
   onDragMove: (pos: { x: number; y: number }, targetSlotId: string | null) => void;
   onDragEnd: (sourceSlotId: string, targetSlotId: string | null) => void;
@@ -295,9 +276,7 @@ function SlotItem({
   onMeasured,
   pitchContainerRef,
   pitchPageOffsetRef,
-  updatePitchPageOffset,
-  getSlotCenter,
-  findSlotAtPosition,
+  findClosestSlot,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -305,7 +284,7 @@ function SlotItem({
 }: SlotItemProps) {
   const slotViewRef = useRef<ViewInstance | null>(null);
   const dragActiveRef = useRef(false);
-  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const hoveredSlotRef = useRef<string | null>(null);
 
   // Smooth, subtle transition for hover and drag states
   const slotScale = useSharedValue(1);
@@ -359,8 +338,9 @@ function SlotItem({
       ) => {
         return Math.hypot(gestureState.dx, gestureState.dy) > 5;
       },
-      onPanResponderGrant: (evt: GestureResponderEvent) => {
+      onPanResponderGrant: () => {
         dragActiveRef.current = false;
+        hoveredSlotRef.current = null;
 
         // Measure pitch container offset for accurate relative coordinates
         pitchContainerRef.current?.measure(
@@ -373,27 +353,15 @@ function SlotItem({
             py: number,
           ) => {
             if (px !== undefined && py !== undefined) {
-              updatePitchPageOffset(px, py);
+              pitchPageOffsetRef.current = { pageX: px, pageY: py };
             }
           },
         );
-
-        const center = getSlotCenter(slot.id);
-        if (center) {
-          dragOffsetRef.current = {
-            x: evt.nativeEvent.pageX - pitchPageOffsetRef.current.pageX - center.x,
-            y: evt.nativeEvent.pageY - pitchPageOffsetRef.current.pageY - center.y,
-          };
-        } else {
-          dragOffsetRef.current = { x: 0, y: 0 };
-        }
       },
       onPanResponderMove: (evt: GestureResponderEvent, gestureState: PanResponderGestureState) => {
         const dist = Math.hypot(gestureState.dx, gestureState.dy);
-        const relX =
-          evt.nativeEvent.pageX - pitchPageOffsetRef.current.pageX - dragOffsetRef.current.x;
-        const relY =
-          evt.nativeEvent.pageY - pitchPageOffsetRef.current.pageY - dragOffsetRef.current.y;
+        const relX = evt.nativeEvent.pageX - pitchPageOffsetRef.current.pageX;
+        const relY = evt.nativeEvent.pageY - pitchPageOffsetRef.current.pageY;
 
         if (!dragActiveRef.current && dist > 5) {
           dragActiveRef.current = true;
@@ -401,18 +369,15 @@ function SlotItem({
         }
 
         if (dragActiveRef.current) {
-          const targetSlotId = findSlotAtPosition(relX, relY, slot.id);
+          const targetSlotId = findClosestSlot(relX, relY, slot.id);
+          hoveredSlotRef.current = targetSlotId;
           onDragMove({ x: relX, y: relY }, targetSlotId);
         }
       },
-      onPanResponderRelease: (evt: GestureResponderEvent) => {
+      onPanResponderRelease: () => {
         if (dragActiveRef.current) {
+          const target = hoveredSlotRef.current;
           dragActiveRef.current = false;
-          const relX =
-            evt.nativeEvent.pageX - pitchPageOffsetRef.current.pageX - dragOffsetRef.current.x;
-          const relY =
-            evt.nativeEvent.pageY - pitchPageOffsetRef.current.pageY - dragOffsetRef.current.y;
-          const target = findSlotAtPosition(relX, relY, slot.id);
           onDragEnd(slot.id, target);
         } else {
           onPress();
