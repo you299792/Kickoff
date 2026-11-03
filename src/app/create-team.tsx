@@ -1081,6 +1081,7 @@ export default function CreateTeamScreen() {
               style={StyleSheet.absoluteFill}
             />
             <Animated.View
+              style={styles.playerPickerSheet}
               entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
               exiting={FadeOut.duration(140)}>
             <ThemedView type="backgroundElement" style={styles.playerPicker}>
@@ -1134,47 +1135,62 @@ export default function CreateTeamScreen() {
                   </AnimatedPressable>
                 </View>
               ) : null}
-              <View style={styles.reservePickerHeader}>
-                <ThemedText style={styles.reservePickerTitle}>Available from reserves</ThemedText>
-                <ThemedText themeColor="textSecondary" style={styles.reservePickerCount}>
-                  {reservePlayers.length}
-                </ThemedText>
-              </View>
-              <ScrollView style={styles.playerPickerList} keyboardShouldPersistTaps="handled">
-                {reservePlayers.map((player, reserveIndex) => (
-                  <Animated.View
-                    key={player.id}
-                    entering={FadeInUp.delay(Math.min(reserveIndex, 10) * 35).duration(220)}>
-                    <AnimatedPressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Replace current starter with ${player.name.trim()}, ${player.position}`}
-                      onPress={() => assignPlayerToSlot(player.id)}
-                      style={[
-                        styles.playerPickerOption,
-                      ]}>
-                      <View style={styles.playerPickerBadge}>
-                        <ThemedText style={styles.playerPickerBadgeText}>{player.number}</ThemedText>
-                      </View>
-                      <View style={styles.reservePlayerInfo}>
-                        <ThemedText style={styles.playerPickerName} numberOfLines={1}>
-                          {player.name.trim()}
-                        </ThemedText>
-                        <ThemedText themeColor="textSecondary" style={styles.playerPickerPosition}>
-                          {player.position}
-                        </ThemedText>
-                      </View>
-                      <ThemedText style={styles.reserveReplaceIndicator}>↗</ThemedText>
-                    </AnimatedPressable>
-                  </Animated.View>
+              <View style={styles.reservePickerSection}>
+                <View style={styles.reservePickerHeader}>
+                  <View style={styles.reservePickerHeading}>
+                    <ThemedText style={styles.reservePickerTitle}>Available from reserves</ThemedText>
+                    <ThemedText style={styles.reservePickerScrollHint}>
+                      {reservePlayers.length > 4
+                        ? `Swipe to browse all ${reservePlayers.length} reserves`
+                        : 'Select a player to fill this position'}
+                    </ThemedText>
+                  </View>
+                  <View style={styles.reservePickerCountBadge}>
+                    <ThemedText style={styles.reservePickerCount}>
+                      {reservePlayers.length}
+                    </ThemedText>
+                  </View>
+                </View>
+                <ScrollView
+                  style={styles.playerPickerList}
+                  contentContainerStyle={styles.playerPickerListContent}
+                  keyboardShouldPersistTaps="handled"
+                  nestedScrollEnabled
+                  persistentScrollbar
+                  showsVerticalScrollIndicator>
+                  {reservePlayers.map((player, reserveIndex) => (
+                    <Animated.View
+                      key={player.id}
+                      entering={FadeInUp.delay(Math.min(reserveIndex, 10) * 35).duration(220)}>
+                      <AnimatedPressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Replace current starter with ${player.name.trim()}, ${player.position}`}
+                        onPress={() => assignPlayerToSlot(player.id)}
+                        style={styles.playerPickerOption}>
+                        <View style={styles.playerPickerBadge}>
+                          <ThemedText style={styles.playerPickerBadgeText}>{player.number}</ThemedText>
+                        </View>
+                        <View style={styles.reservePlayerInfo}>
+                          <ThemedText style={styles.playerPickerName} numberOfLines={1}>
+                            {player.name.trim()}
+                          </ThemedText>
+                          <ThemedText themeColor="textSecondary" style={styles.playerPickerPosition}>
+                            {player.position}
+                          </ThemedText>
+                        </View>
+                        <ThemedText style={styles.reserveReplaceIndicator}>↗</ThemedText>
+                      </AnimatedPressable>
+                    </Animated.View>
                   ))}
-                {reservePlayers.length === 0 ? (
-                  <ThemedText themeColor="textSecondary" style={styles.playerPickerEmpty}>
-                    {players.length === 0
-                      ? 'Add players to the squad before setting the starting lineup.'
-                      : 'No reserves available. Add another player to replace this starter.'}
-                  </ThemedText>
-                ) : null}
-              </ScrollView>
+                  {reservePlayers.length === 0 ? (
+                    <ThemedText themeColor="textSecondary" style={styles.playerPickerEmpty}>
+                      {players.length === 0
+                        ? 'Add players to the squad before setting the starting lineup.'
+                        : 'No reserves available. Add another player to replace this starter.'}
+                    </ThemedText>
+                  ) : null}
+                </ScrollView>
+              </View>
               {activeStarter ? (
                 <AnimatedPressable
                   accessibilityRole="button"
@@ -1576,15 +1592,23 @@ const styles = StyleSheet.create({
   lineupCount: { alignSelf: 'flex-end', fontSize: 12 },
   modalBackdrop: {
     flex: 1,
-    justifyContent: 'center',
-    padding: Spacing.four,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.two,
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
+  playerPickerSheet: {
+    width: '100%',
+    height: '90%',
+    maxHeight: '90%',
+  },
   playerPicker: {
-    maxHeight: '75%',
+    flex: 1,
     padding: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: Spacing.three,
+    paddingBottom: Spacing.four,
+    borderTopLeftRadius: Spacing.four,
+    borderTopRightRadius: Spacing.four,
+    gap: Spacing.two,
   },
   playerPickerHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two },
   playerPickerHeading: { flex: 1, gap: Spacing.one },
@@ -1622,27 +1646,56 @@ const styles = StyleSheet.create({
     backgroundColor: '#1f7a4d',
   },
   keepStarterText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  reservePickerSection: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(31, 122, 77, 0.45)',
+    borderRadius: Spacing.three,
+    backgroundColor: 'rgba(31, 122, 77, 0.07)',
+  },
   reservePickerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(31, 122, 77, 0.25)',
   },
-  reservePickerTitle: { fontSize: 14, fontWeight: '700' },
+  reservePickerHeading: { flex: 1, gap: 3 },
+  reservePickerTitle: { fontSize: 15, fontWeight: '700' },
+  reservePickerScrollHint: { color: '#1f7a4d', fontSize: 13, fontWeight: '700' },
+  reservePickerCountBadge: {
+    minWidth: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: 'rgba(31, 122, 77, 0.12)',
+  },
   reservePickerCount: {
-    minWidth: 24,
+    minWidth: 18,
     textAlign: 'center',
-    fontSize: 12,
+    color: '#1f7a4d',
+    fontSize: 13,
     fontWeight: '700',
   },
-  playerPickerList: { flexGrow: 0, maxHeight: 320 },
+  playerPickerList: { flex: 1 },
+  playerPickerListContent: { padding: Spacing.two, paddingBottom: Spacing.three },
   playerPickerOption: {
-    minHeight: 64,
+    minHeight: 72,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    paddingHorizontal: Spacing.one,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(128,128,128,0.3)',
+    marginBottom: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 122, 77, 0.18)',
+    borderRadius: Spacing.two,
+    backgroundColor: 'rgba(31, 122, 77, 0.06)',
   },
   playerPickerBadge: {
     width: 36,
