@@ -810,6 +810,7 @@ export default function NewMatchScreen() {
                 style={StyleSheet.absoluteFill}
               />
               <Animated.View
+                style={styles.lineupPickerSheet}
                 entering={FadeInUp.springify().damping(16).mass(0.7).duration(260)}
                 exiting={FadeOut.duration(140)}>
               <ThemedView type="backgroundElement" style={styles.lineupPickerCard}>
@@ -868,65 +869,82 @@ export default function NewMatchScreen() {
                   </View>
                 ) : null}
 
-                <View style={styles.matchReserveHeader}>
-                  <ThemedText style={styles.matchReserveTitle}>Available from reserves</ThemedText>
-                  <ThemedText themeColor="textSecondary" style={styles.matchReserveCount}>
-                    {matchReservePlayers.length}
-                  </ThemedText>
+                <View style={styles.matchReserveSection}>
+                  <View style={styles.matchReserveHeader}>
+                    <View style={styles.matchReserveHeading}>
+                      <ThemedText style={styles.matchReserveTitle}>
+                        Available from reserves
+                      </ThemedText>
+                      <ThemedText style={styles.matchReserveScrollHint}>
+                        {matchReservePlayers.length > 4
+                          ? `Swipe to browse all ${matchReservePlayers.length} reserves`
+                          : 'Select a player to fill this position'}
+                      </ThemedText>
+                    </View>
+                    <View style={styles.matchReserveCountBadge}>
+                      <ThemedText style={styles.matchReserveCount}>
+                        {matchReservePlayers.length}
+                      </ThemedText>
+                    </View>
+                  </View>
+                  <ScrollView
+                    style={styles.matchReserveList}
+                    contentContainerStyle={styles.matchReserveListContent}
+                    keyboardShouldPersistTaps="handled"
+                    nestedScrollEnabled
+                    persistentScrollbar
+                    showsVerticalScrollIndicator>
+                    {matchReservePlayers.map((player, reserveIndex) => (
+                      <Animated.View
+                        key={`${player.number}-${player.name}`}
+                        entering={FadeInUp.delay(Math.min(reserveIndex, 10) * 35).duration(220)}>
+                        <AnimatedPressable
+                          scaleTo={0.98}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Replace current starter with ${player.name}, ${player.position}`}
+                          onPress={() => {
+                            if (lineupPicker) {
+                              updateMatchLineup(
+                                lineupPicker.team,
+                                lineupPicker.slot.id,
+                                player.name,
+                              );
+                            }
+                          }}
+                          style={styles.matchReserveOption}>
+                          <View
+                            style={[
+                              styles.matchReserveBadge,
+                              { backgroundColor: lineupPicker?.team.color ?? '#1f7a4d' },
+                            ]}>
+                            <ThemedText style={styles.matchReserveBadgeText}>
+                              {player.number}
+                            </ThemedText>
+                          </View>
+                          <View style={styles.matchReserveInfo}>
+                            <ThemedText style={styles.matchReserveName} numberOfLines={1}>
+                              {player.name}
+                            </ThemedText>
+                            <ThemedText themeColor="textSecondary" style={styles.matchReservePosition}>
+                              {player.position}
+                            </ThemedText>
+                          </View>
+                          <ThemedText style={styles.matchReserveReplaceIcon}>↗</ThemedText>
+                        </AnimatedPressable>
+                      </Animated.View>
+                    ))}
+                    {matchReservePlayers.length === 0 ? (
+                      <ThemedText
+                        type="small"
+                        themeColor="textSecondary"
+                        style={styles.matchReserveEmpty}>
+                        {lineupPicker?.team.roster.length === 0
+                          ? 'Add players to this team before setting the lineup.'
+                          : 'No reserves available. Add another player to replace this starter.'}
+                      </ThemedText>
+                    ) : null}
+                  </ScrollView>
                 </View>
-                <ScrollView
-                  style={styles.matchReserveList}
-                  keyboardShouldPersistTaps="handled">
-                  {matchReservePlayers.map((player, reserveIndex) => (
-                    <Animated.View
-                      key={`${player.number}-${player.name}`}
-                      entering={FadeInUp.delay(Math.min(reserveIndex, 10) * 35).duration(220)}>
-                      <AnimatedPressable
-                        scaleTo={0.98}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Replace current starter with ${player.name}, ${player.position}`}
-                        onPress={() => {
-                          if (lineupPicker) {
-                            updateMatchLineup(
-                              lineupPicker.team,
-                              lineupPicker.slot.id,
-                              player.name,
-                            );
-                          }
-                        }}
-                        style={styles.matchReserveOption}>
-                        <View
-                          style={[
-                            styles.matchReserveBadge,
-                            { backgroundColor: lineupPicker?.team.color ?? '#1f7a4d' },
-                          ]}>
-                          <ThemedText style={styles.matchReserveBadgeText}>
-                            {player.number}
-                          </ThemedText>
-                        </View>
-                        <View style={styles.matchReserveInfo}>
-                          <ThemedText style={styles.matchReserveName} numberOfLines={1}>
-                            {player.name}
-                          </ThemedText>
-                          <ThemedText themeColor="textSecondary" style={styles.matchReservePosition}>
-                            {player.position}
-                          </ThemedText>
-                        </View>
-                        <ThemedText style={styles.matchReserveReplaceIcon}>↗</ThemedText>
-                      </AnimatedPressable>
-                    </Animated.View>
-                  ))}
-                  {matchReservePlayers.length === 0 ? (
-                    <ThemedText
-                      type="small"
-                      themeColor="textSecondary"
-                      style={styles.matchReserveEmpty}>
-                      {lineupPicker?.team.roster.length === 0
-                        ? 'Add players to this team before setting the lineup.'
-                        : 'No reserves available. Add another player to replace this starter.'}
-                    </ThemedText>
-                  ) : null}
-                </ScrollView>
                 {currentMatchStarter && lineupPicker ? (
                   <AnimatedPressable
                     accessibilityRole="button"
@@ -2017,15 +2035,23 @@ const styles = StyleSheet.create({
   matchPitchPlayerSelectedText: { color: '#145c3a' },
   lineupPickerBackdrop: {
     flex: 1,
-    justifyContent: 'center',
-    padding: Spacing.four,
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.two,
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
+  lineupPickerSheet: {
+    width: '100%',
+    height: '90%',
+    maxHeight: '90%',
+  },
   lineupPickerCard: {
-    maxHeight: '80%',
+    flex: 1,
     padding: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: Spacing.three,
+    paddingBottom: Spacing.four,
+    borderTopLeftRadius: Spacing.four,
+    borderTopRightRadius: Spacing.four,
+    gap: Spacing.two,
   },
   lineupPickerHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.two },
   lineupPickerHeading: { flex: 1, gap: Spacing.one },
@@ -2062,22 +2088,50 @@ const styles = StyleSheet.create({
     backgroundColor: '#1f7a4d',
   },
   keepMatchStarterText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  matchReserveSection: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(31, 122, 77, 0.45)',
+    borderRadius: Spacing.three,
+    backgroundColor: 'rgba(31, 122, 77, 0.07)',
+  },
   matchReserveHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(31, 122, 77, 0.25)',
   },
-  matchReserveTitle: { fontSize: 14, fontWeight: '700' },
-  matchReserveCount: { minWidth: 24, textAlign: 'center', fontSize: 12, fontWeight: '700' },
-  matchReserveList: { flexGrow: 0, maxHeight: 320 },
+  matchReserveHeading: { flex: 1, gap: 3 },
+  matchReserveTitle: { fontSize: 15, fontWeight: '700' },
+  matchReserveScrollHint: { color: '#1f7a4d', fontSize: 13, fontWeight: '700' },
+  matchReserveCountBadge: {
+    minWidth: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: 'rgba(31, 122, 77, 0.12)',
+  },
+  matchReserveCount: { minWidth: 18, textAlign: 'center', color: '#1f7a4d', fontSize: 13, fontWeight: '700' },
+  matchReserveList: { flex: 1 },
+  matchReserveListContent: { padding: Spacing.two, paddingBottom: Spacing.three },
   matchReserveOption: {
-    minHeight: 64,
+    minHeight: 72,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    paddingHorizontal: Spacing.one,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: HAIRLINE,
+    marginBottom: Spacing.one,
+    paddingHorizontal: Spacing.two,
+    borderWidth: 1,
+    borderColor: 'rgba(31, 122, 77, 0.18)',
+    borderRadius: Spacing.two,
+    backgroundColor: 'rgba(31, 122, 77, 0.06)',
   },
   matchReserveBadge: {
     width: 36,
